@@ -17,6 +17,7 @@ serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "2.0"
 chrono = { version = "0.4", features = ["serde"] }
+rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "mp3", "vorbis", "flac"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"
