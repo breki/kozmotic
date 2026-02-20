@@ -208,8 +208,9 @@ fn play_sound(
     repeat: u32,
     interval: u64,
 ) -> Result<(), AgentPingError> {
-    let stream = rodio::OutputStreamBuilder::open_default_stream()
+    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
         .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+    stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
 
@@ -235,8 +236,9 @@ fn play_frequency(
 ) -> Result<(), AgentPingError> {
     use rodio::source::Source;
 
-    let stream = rodio::OutputStreamBuilder::open_default_stream()
+    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
         .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+    stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
 
@@ -253,8 +255,9 @@ fn play_frequency(
 }
 
 fn play_file(path: &str, volume: f32, repeat: u32, interval: u64) -> Result<(), AgentPingError> {
-    let stream = rodio::OutputStreamBuilder::open_default_stream()
+    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
         .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+    stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
 
