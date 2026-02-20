@@ -12,6 +12,9 @@ and this project adheres to
 
 ### Added
 
+- `self install` subcommand to copy the binary to
+  `~/.claude/bin/` for use in Claude Code hooks
+  - `--target-dir` flag to override the install directory
 - `agent-ping` subcommand for playing notification sounds
   - Built-in presets named after Claude Code hook events:
     `PostToolUse`, `Stop`, `SubagentStop`,

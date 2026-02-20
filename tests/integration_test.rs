@@ -1,5 +1,6 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
+use std::path::PathBuf;
 
 #[test]
 fn test_help() {
@@ -192,4 +193,68 @@ fn test_agent_ping_case_insensitive() {
         .assert()
         .success()
         .stdout(predicate::str::contains("\"played\": false"));
+}
+
+// --- self install tests ---
+
+fn temp_install_dir(name: &str) -> PathBuf {
+    let dir =
+        std::env::temp_dir()
+            .join("kozmotic-test")
+            .join(format!("{}-{}", std::process::id(), name));
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+#[test]
+fn test_self_install_json() {
+    let dir = temp_install_dir("json");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("self")
+        .arg("install")
+        .arg("--target-dir")
+        .arg(dir.as_os_str())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"status\": \"success\""))
+        .stdout(predicate::str::contains("installed_path"))
+        .stdout(predicate::str::contains("hook_example"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_self_install_human() {
+    let dir = temp_install_dir("human");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("--format")
+        .arg("human")
+        .arg("self")
+        .arg("install")
+        .arg("--target-dir")
+        .arg(dir.as_os_str())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Installed to"))
+        .stdout(predicate::str::contains("agent-ping"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_self_install_creates_binary() {
+    let dir = temp_install_dir("binary");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("self")
+        .arg("install")
+        .arg("--target-dir")
+        .arg(dir.as_os_str())
+        .assert()
+        .success();
+
+    let binary_name = if cfg!(windows) {
+        "kozmotic.exe"
+    } else {
+        "kozmotic"
+    };
+    assert!(dir.join(binary_name).exists());
+    let _ = std::fs::remove_dir_all(&dir);
 }

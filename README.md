@@ -26,12 +26,36 @@ are used within the project's own development workflow.
 
 ## Installation
 
-```bash
-# From crates.io (when published)
-cargo install kozmotic
+### Quick install (from GitHub Releases)
 
-# From source
-git clone https://github.com/yourusername/kozmotic.git
+Download the latest binary for your platform from
+[GitHub Releases](https://github.com/breki/kozmotic/releases),
+then install it to `~/.claude/bin/`:
+
+```bash
+./kozmotic self install
+```
+
+This copies the binary to `~/.claude/bin/kozmotic` so
+Claude Code hooks can reference it directly:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "~/.claude/bin/kozmotic agent-ping --sound Stop"
+      }
+    ]
+  }
+}
+```
+
+### From source (development)
+
+```bash
+git clone https://github.com/breki/kozmotic.git
 cd kozmotic
 cargo install --path .
 ```
