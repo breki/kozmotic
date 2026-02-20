@@ -42,7 +42,41 @@ Create a git commit that follows project conventions.
    If any check fails, fix the issue first (or ask the
    user) — do not skip hooks or checks.
 
-4. **Draft the commit message**
+4. **Update CHANGELOG.md**
+
+   If the commit adds features, fixes bugs, changes
+   behaviour, or removes functionality, add a bullet to
+   the `[Unreleased]` section of `CHANGELOG.md` under
+   the appropriate heading (`Added`, `Changed`, `Fixed`,
+   or `Removed`). Stage the file together with the code
+   changes.
+
+   Skip this step for commits that do not affect the
+   user-visible product (e.g., `chore`, `ci`, `style`,
+   `docs` that only touch `CLAUDE.md` or similar).
+
+5. **Bump the version (when appropriate)**
+
+   If the user explicitly asks for a release or version
+   bump:
+
+   - Determine the correct SemVer increment:
+     - **MAJOR** — breaking changes to CLI interface or
+       JSON output schema.
+     - **MINOR** — new subcommands, flags, or
+       backwards-compatible features.
+     - **PATCH** — bug fixes, documentation, internal
+       refactors.
+   - Update `version` in `Cargo.toml` (single source of
+     truth).
+   - In `CHANGELOG.md`, rename `[Unreleased]` to
+     `[X.Y.Z] - YYYY-MM-DD` and add a fresh
+     `[Unreleased]` section above it.
+   - Stage both files with the rest of the changes.
+
+   Do **not** bump the version unless the user asks.
+
+6. **Draft the commit message**
 
    Follow Conventional Commits format:
 
@@ -86,7 +120,7 @@ Create a git commit that follows project conventions.
    - Do **NOT** add `Co-Authored-By` lines.
    - Do **NOT** add `Generated with Claude Code` lines.
 
-5. **Create the commit**
+7. **Create the commit**
 
    Use a heredoc so the message formats correctly:
 
@@ -104,7 +138,7 @@ Create a git commit that follows project conventions.
    Always create a **new** commit. Never amend a previous
    commit unless the user explicitly asks.
 
-6. **Verify**
+8. **Verify**
 
    Run `git status` after committing to confirm a clean
    state. Report the commit hash and message to the user.

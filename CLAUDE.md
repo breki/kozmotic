@@ -80,8 +80,37 @@ Before completing any task:
 
 ## Semantic Versioning
 
+Follow [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **MAJOR** — breaking changes to CLI interface or JSON
+  output schema
+- **MINOR** — new subcommands, flags, or backwards-compatible
+  features
+- **PATCH** — bug fixes, documentation, internal refactors
+
 The app version lives in `Cargo.toml` and is the **single
 source of truth**.
+
+When bumping the version:
+1. Update `version` in `Cargo.toml`
+2. Add a new section to `CHANGELOG.md`
+3. Commit both changes together
+
+## Release Notes
+
+Maintain `CHANGELOG.md` using the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+format. Group changes under these headings:
+
+- **Added** — new features
+- **Changed** — changes to existing functionality
+- **Fixed** — bug fixes
+- **Removed** — removed features
+
+Always keep an `[Unreleased]` section at the top for
+in-progress work. When releasing, rename `[Unreleased]`
+to `[X.Y.Z] - YYYY-MM-DD` and add a fresh
+`[Unreleased]` above it.
 
 ## Commit Messages
 
