@@ -10,4 +10,7 @@ Ideas and tasks to be implemented next.
 
 ## Tasks
 
-<!-- Add tasks here -->
+- [ ] Restructure code into smaller, more manageable
+  modules (extract from single-file `src/main.rs`)
+- [ ] Add Claude Code Stop hook to run `cargo clippy`
+  on modified files and `cargo test`
