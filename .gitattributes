@@ -1,0 +1,12 @@
+# Normalize all text files to LF in the repository.
+# Checkout as native line endings on each platform.
+* text=auto eol=lf
+
+# Ensure these are always treated as binary.
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.png binary
+*.jpg binary
+*.ico binary
