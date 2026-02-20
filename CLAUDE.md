@@ -78,6 +78,12 @@ Before completing any task:
 3. **No warnings**:
    `cargo clippy --all-targets -- -D warnings`
 
+## Planning
+
+`TODO.md` tracks ideas and upcoming tasks. Check it
+before starting new work and keep it up to date as
+items are completed or added.
+
 ## Semantic Versioning
 
 Follow [Semantic Versioning 2.0.0](https://semver.org/):
