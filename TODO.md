@@ -1,7 +1,5 @@
 # TODO
 
-- expose pwsh scripts for common xtasks and tell Claude to use those so it is 
-  easier to permission-control.
 - Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
   keywords, categories)
@@ -38,3 +36,5 @@
 - Documented global install: hooks go in
   ~/.claude/settings.json, skills in
   ~/.claude/skills/ (2026-03-25)
+- Add wrapper scripts for permission control
+  (2026-03-25)
