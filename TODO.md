@@ -1,7 +1,6 @@
 # TODO
 
-- Add coverage enforcement with `cargo-llvm-cov`
-  (per-module 95% thresholds)
+- Why does the project need so many 3rd party dependencies?
 - Plan a CLI tool for Claude Code status line that
   allows the user to specify which things they want
   in the status line via command line parameters.
@@ -40,3 +39,5 @@
 - Add Cargo metadata (2026-03-25)
 - Colored error output — skipped, unnecessary
   for agent-first CLI tools (2026-03-25)
+- Add coverage reporting to xtask validate
+  (no threshold yet, 57%) (2026-03-25)
