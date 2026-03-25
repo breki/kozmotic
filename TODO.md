@@ -1,11 +1,48 @@
 # TODO
 
-- Plan a CLI tool for Claude Code status line that
-  allows the user to specify which things they want
-  in the status line via command line parameters.
-  Investigate what information would be most useful
-  and how to get it from the agent's context or
-  environment.
+## `status-line` subcommand
+
+A new subcommand that reads Claude Code session
+JSON from stdin and outputs a formatted status line.
+Configured as the `command` in `settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/bin/kozmotic status-line --show model,context,cost"
+  }
+}
+```
+
+### Available data from stdin JSON
+
+- `model.display_name` — current model
+- `context_window.used_percentage` — context %
+- `cost.total_cost_usd` — session cost
+- `cost.total_lines_added/removed` — code changes
+- `rate_limits.five_hour.used_percentage` — rate
+  limit usage
+- `vim.mode` — NORMAL/INSERT
+- `agent.name` — agent name
+
+### Implementation plan
+
+- [ ] Add `StatusLine` variant to `Commands`
+- [ ] Parse stdin JSON (serde deserialize, only
+  the fields we need)
+- [ ] Define "widgets": model, context, cost,
+  rate-limit, lines-changed, vim-mode
+- [ ] `--show` flag: comma-separated widget list
+  (default: `model,context,cost`)
+- [ ] `--separator` flag (default: ` | `)
+- [ ] Support ANSI colors for context % thresholds
+  (green < 50%, yellow < 80%, red >= 80%)
+- [ ] Output a single line to stdout
+- [ ] Add integration tests with sample JSON input
+- [ ] Add a `/statusline-setup` skill that
+  configures settings.json for the user
+- [ ] Document in CLAUDE.md and architect skill
 
 ## Done
 
@@ -42,3 +79,4 @@
   (no threshold yet, 57%) (2026-03-25)
 - Dependency audit: removed unused `anyhow`, all
   remaining deps justified (2026-03-25)
+- Plan status-line subcommand (2026-03-25)
