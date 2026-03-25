@@ -12,6 +12,10 @@ and this project adheres to
 
 ### Added
 
+- Claude Code Stop hook that runs `cargo clippy` and
+  `cargo test` when Rust files are modified
+- Restructured `src/main.rs` into `output`, `agent_ping`,
+  and `self_install` modules
 - `self install` subcommand to copy the binary to
   `~/.claude/bin/` for use in Claude Code hooks
   - `--target-dir` flag to override the install directory
