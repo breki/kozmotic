@@ -348,7 +348,7 @@ fn test_status_line_tokens() {
         .write_stdin(FULL_STATUS_JSON)
         .assert()
         .success()
-        .stdout(predicate::str::contains("tok 15.2kin/4.5kout"));
+        .stdout(predicate::str::contains("tok 15.2k in / 4.5k out"));
 }
 
 #[test]

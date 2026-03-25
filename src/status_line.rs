@@ -220,7 +220,7 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             let input = data.context_window.total_input_tokens;
             let output = data.context_window.total_output_tokens;
             Some(format!(
-                "tok {}in/{}out",
+                "tok {} in / {} out",
                 format_tokens(input),
                 format_tokens(output)
             ))
