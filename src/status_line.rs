@@ -301,7 +301,7 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
                 parts.push(format!("\x1b[31m{}del\x1b[0m", counts.deleted));
             }
             if parts.is_empty() {
-                None
+                Some("git (clean)".to_string())
             } else {
                 Some(format!("git {}", parts.join(" ")))
             }
