@@ -21,9 +21,7 @@ disable-model-invocation: true
 
 4. Run the acceptance checks:
    ```
-   cargo fmt --all -- --check
-   cargo clippy --all-targets -- -D warnings
-   cargo test
+   cargo xtask validate
    ```
 
 5. Move the completed item from the pending list

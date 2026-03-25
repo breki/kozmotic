@@ -24,9 +24,11 @@ when working with code in this repository.
 
 ## Build & Development Commands
 
+- `cargo xtask validate` — run all checks (fmt +
+  clippy + test) in one step
 - `cargo build` — build the project
 - `cargo run -- <args>` — run locally
-  (e.g., `cargo run -- example --name Foo`)
+  (e.g., `cargo run -- agent-ping --sound Stop`)
 - `cargo test` — run all tests (unit + integration)
 - `cargo test <test_name>` — run a single test
   (e.g., `cargo test test_example_json_output`)
@@ -37,27 +39,47 @@ when working with code in this repository.
 
 ## Architecture
 
-Kozmotic is an early-stage Rust CLI providing agent-friendly
-tools with structured JSON output. It uses a subcommand
-pattern via `clap` derive.
+Kozmotic is an early-stage Rust CLI providing
+agent-friendly tools with structured JSON output. The
+project is a Cargo workspace with two crates:
 
-**Core structure (`src/main.rs`):**
-- `Cli` — top-level parser with a global `--format` flag
-  (`json` | `human`)
-- `Commands` — enum of subcommands (currently just
-  `Example`; new tools go here)
-- `Output<T>` — generic JSON response wrapper with `status`,
-  `data`, and `metadata` fields. Use
-  `Output::success(tool_name, data)` to construct responses.
+- **`kozmotic`** (root) — the main CLI binary
+- **`xtask`** — dev automation tasks
+  (`cargo xtask validate`, etc.)
 
-**Adding a new tool:** Add a variant to `Commands`, handle it
-in the `main()` match, and wrap output with
-`Output::success()`. Respect the `--format` flag for JSON vs
-human-readable output.
+### CLI structure
 
-**Integration tests (`tests/integration_test.rs`):** Use
-`assert_cmd` to invoke the binary and `predicates` to
-validate stdout. Tests run against the compiled binary, not
+Uses a subcommand pattern via `clap` derive.
+
+- `Cli` — top-level parser with a global `--format`
+  flag (`json` | `human`)
+- `Commands` — enum of subcommands (`Example`,
+  `AgentPing`, `Self_`)
+- `Output<T>` (`src/output.rs`) — generic JSON
+  response wrapper with `status`, `data`, and
+  `metadata` fields. Use
+  `Output::success(tool_name, data)` to construct
+  responses.
+
+### Modules
+
+- `src/main.rs` — CLI definition and dispatch
+- `src/output.rs` — `Output<T>`, `OutputFormat`
+- `src/agent_ping.rs` — sound notification tool
+- `src/self_install.rs` — binary installer
+
+### Adding a new tool
+
+Add a variant to `Commands`, handle it in the
+`main()` match, and wrap output with
+`Output::success()`. Respect the `--format` flag for
+JSON vs human-readable output.
+
+### Integration tests
+
+`tests/integration_test.rs` uses `assert_cmd` to
+invoke the binary and `predicates` to validate
+stdout. Tests run against the compiled binary, not
 library code.
 
 ## CI
@@ -72,12 +94,14 @@ Rust edition is 2024. Requires stable toolchain.
 
 ## Acceptance Criteria
 
-Before completing any task:
+Before completing any task, run
+`cargo xtask validate`, which checks:
 
-1. **All tests pass**: `cargo test`
-2. **Coverage >= 95%**
-3. **No warnings**:
+1. **Formatting**: `cargo fmt --all -- --check`
+2. **No warnings**:
    `cargo clippy --all-targets -- -D warnings`
+3. **All tests pass**: `cargo test`
+4. **Coverage >= 95%**
 
 ## Planning
 

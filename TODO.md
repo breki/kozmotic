@@ -1,11 +1,8 @@
 # TODO
 
-- Add `.cargo/config.toml` with cargo aliases
 - Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
   keywords, categories)
-- Add xtask crate with validate command (clippy +
-  test + fmt check)
 - Add colored error output using the `colored` crate
 - Add developer diary (`docs/developer/DIARY.md`)
 - Add coverage enforcement with `cargo-llvm-cov`
@@ -32,3 +29,5 @@
 - Dog-food agent-ping in Stop and Notification hooks
   (2026-03-25)
 - Add clippy lint config to Cargo.toml (2026-03-25)
+- Add xtask crate with validate command and cargo
+  aliases (2026-03-25)

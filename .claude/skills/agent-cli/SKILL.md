@@ -265,4 +265,4 @@ Before submitting a new subcommand, verify:
 - [ ] Errors return structured error envelope on stderr with correct exit code
 - [ ] No interactive prompts — all inputs via flags/args
 - [ ] Integration tests cover JSON output, human output, and error cases
-- [ ] `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` all pass
+- [ ] `cargo xtask validate` passes

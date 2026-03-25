@@ -38,23 +38,33 @@ use.
 
 ```
 kozmotic/
+  .cargo/
+    config.toml       # cargo aliases (xtask)
   .claude/
+    hooks/            # Claude Code hook scripts
     skills/           # slash-command skills
-      agent-cli/      # patterns for new subcommands
-      architect/      # this file
-      commit/         # /commit workflow
   .github/
     workflows/
       ci.yml          # test + fmt + clippy on 3 OS
+      release.yml     # binary release workflow
   assets/
-    sounds/           # embedded CC0 OGG files
+    sounds/           # embedded Pixabay MP3 files
   src/
-    main.rs           # all code (single-file for now)
+    main.rs           # CLI definition and dispatch
+    output.rs         # Output<T>, OutputFormat
+    agent_ping.rs     # sound notification tool
+    self_install.rs   # binary installer
   tests/
     integration_test.rs
-  Cargo.toml
+  xtask/
+    src/
+      main.rs         # xtask CLI entry point
+      helpers.rs      # project_root, run_cargo, etc.
+      validate.rs     # fmt + clippy + test pipeline
+  Cargo.toml          # workspace root
   CHANGELOG.md        # Keep a Changelog format
   CLAUDE.md           # project instructions
+  CREDITS.md          # sound attribution
   LICENSE
   TODO.md             # ideas and upcoming tasks
 ```
@@ -77,6 +87,7 @@ Each subcommand is a variant. Current commands:
 |---------|---------|
 | `example` | Placeholder hello-world |
 | `agent-ping` | Play notification sounds |
+| `self install` | Copy binary to `~/.claude/bin/` |
 
 ### `Output<T>` envelope
 
@@ -130,11 +141,9 @@ hook events):
 
 | Preset | Sound file | Use case |
 |--------|-----------|----------|
-| `PostToolUse` | beep.ogg | After tool call |
-| `Stop` | message-sent.ogg | Agent finished |
-| `SubagentStop` | message-sent.ogg | Subagent done |
-| `TaskCompleted` | message-sent.ogg | Task complete |
-| `Notification` | message.ogg | Attention needed |
+| `Stop` | stop-chime.mp3 | Agent finished |
+| `StopFailure` | error.mp3 | API error |
+| `Notification` | notification-chime.mp3 | Attention needed |
 
 Additional flags: `--volume`, `--repeat`, `--interval`,
 `--duration`, `--list`, `--dry-run`.
@@ -167,11 +176,12 @@ Dev: `assert_cmd`, `predicates`.
 
 ## Quality Gates
 
-Before any task is complete:
+Before any task is complete, run
+`cargo xtask validate`, which checks:
 
-1. `cargo test` — all tests pass
+1. `cargo fmt --all -- --check` — formatted
 2. `cargo clippy --all-targets -- -D warnings` — clean
-3. `cargo fmt --all -- --check` — formatted
+3. `cargo test` — all tests pass
 4. Coverage >= 95%
 
 ## CI Pipeline

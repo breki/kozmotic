@@ -71,9 +71,7 @@ Before starting a release:
 5. **Run quality gates**
 
    ```
-   cargo fmt --all -- --check
-   cargo clippy --all-targets -- -D warnings
-   cargo test
+   cargo xtask validate
    ```
 
    If any check fails, stop and fix before continuing.

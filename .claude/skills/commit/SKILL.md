@@ -35,9 +35,7 @@ Create a git commit that follows project conventions.
 
    Before committing, verify the code is clean:
    ```
-   cargo fmt --all -- --check
-   cargo clippy --all-targets -- -D warnings
-   cargo test
+   cargo xtask validate
    ```
    If any check fails, fix the issue first (or ask the
    user) — do not skip hooks or checks.
