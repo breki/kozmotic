@@ -1,7 +1,11 @@
 # TODO
 
+- Update README with new features and installation instructions.
+
 ## Done
 
+- Install /statusline-setup and /sound skills
+  globally at ~/.claude/skills/ (2026-03-26)
 - Add dim labels and color to status line widgets
   (2026-03-26)
 
