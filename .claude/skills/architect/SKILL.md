@@ -54,6 +54,7 @@ kozmotic/
     output.rs         # Output<T>, OutputFormat
     agent_ping.rs     # sound notification tool
     self_install.rs   # binary installer
+    status_line.rs    # status bar formatter
   tests/
     integration_test.rs
   xtask/
@@ -87,6 +88,7 @@ Each subcommand is a variant. Current commands:
 |---------|---------|
 | `example` | Placeholder hello-world |
 | `agent-ping` | Play notification sounds |
+| `status-line` | Format session data for status bar |
 | `self install` | Copy binary to `~/.claude/bin/` |
 
 ### `Output<T>` envelope
@@ -151,6 +153,37 @@ Additional flags: `--volume`, `--repeat`, `--interval`,
 Sounds are embedded at compile time via
 `include_bytes!` (~99 KB total). Audio playback uses
 `rodio` 0.21 with the `playback` + codec features.
+
+### `status-line`
+
+Reads Claude Code session JSON from stdin and
+outputs a formatted status bar line. Configured in
+`settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/bin/kozmotic status-line --show model,context,cost"
+  }
+}
+```
+
+Available widgets:
+
+| Widget | Output |
+|--------|--------|
+| `model` | Model display name |
+| `context` | Context % (color-coded) |
+| `cost` | Session cost in USD |
+| `lines` | Lines added/removed |
+| `rate-limit` | 5-hour rate limit % |
+| `vim` | Vim mode (NORMAL/INSERT) |
+
+Flags: `--show` (comma-separated widgets),
+`--separator` (default ` | `).
+
+Use `/statusline-setup` to configure automatically.
 
 ## Dependencies
 

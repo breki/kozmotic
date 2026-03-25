@@ -58,7 +58,7 @@ Uses a subcommand pattern via `clap` derive.
 - `Cli` — top-level parser with a global `--format`
   flag (`json` | `human`)
 - `Commands` — enum of subcommands (`Example`,
-  `AgentPing`, `Self_`)
+  `AgentPing`, `StatusLine`, `Self_`)
 - `Output<T>` (`src/output.rs`) — generic JSON
   response wrapper with `status`, `data`, and
   `metadata` fields. Use
@@ -71,6 +71,7 @@ Uses a subcommand pattern via `clap` derive.
 - `src/output.rs` — `Output<T>`, `OutputFormat`
 - `src/agent_ping.rs` — sound notification tool
 - `src/self_install.rs` — binary installer
+- `src/status_line.rs` — status bar formatter
 
 ### Adding a new tool
 
