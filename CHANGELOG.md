@@ -12,6 +12,9 @@ and this project adheres to
 
 ### Added
 
+- Mute-file support for `agent-ping`: create
+  `~/.claude/.mute-sounds` to silence hook sounds
+  without restarting the session (`/sound` skill)
 - `cargo xtask validate` command for fmt + clippy +
   test validation in one step
 - Claude Code Stop hook that runs `cargo clippy` and

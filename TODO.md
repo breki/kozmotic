@@ -1,6 +1,9 @@
 # TODO
 
-- how to temporarily disable sounds for hooks?
+- how to configure kozmotic scripts (and /sound command) globally for all 
+  Claude agents?
+- expose pwsh scripts for common xtasks and tell Claude to use those so it is 
+  easier to permission-control.
 - Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
   keywords, categories)
@@ -32,3 +35,5 @@
 - Add xtask crate with validate command and cargo
   aliases (2026-03-25)
 - Add developer diary (2026-03-25)
+- Add /sound skill and mute-file support in
+  agent-ping (2026-03-25)

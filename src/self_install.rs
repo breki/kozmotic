@@ -39,7 +39,7 @@ fn emit_error(format: &OutputFormat, err: &SelfInstallError) -> ExitCode {
     ExitCode::FAILURE
 }
 
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     #[cfg(unix)]
     {
         std::env::var("HOME").ok().map(PathBuf::from)

@@ -2,6 +2,16 @@ use std::process::ExitCode;
 
 use crate::output::{Output, OutputFormat};
 
+const MUTE_FILE: &str = ".mute-sounds";
+
+fn mute_file_path() -> Option<std::path::PathBuf> {
+    crate::self_install::home_dir().map(|h| h.join(".claude").join(MUTE_FILE))
+}
+
+fn is_muted() -> bool {
+    mute_file_path().is_some_and(|p| p.exists())
+}
+
 const SOUND_STOP_CHIME: &[u8] = include_bytes!("../assets/sounds/stop-chime.mp3");
 const SOUND_NOTIFICATION_CHIME: &[u8] = include_bytes!("../assets/sounds/notification-chime.mp3");
 const SOUND_ERROR: &[u8] = include_bytes!("../assets/sounds/error.mp3");
@@ -187,6 +197,27 @@ pub fn handle_agent_ping(format: &OutputFormat, args: AgentPingArgs) -> ExitCode
                 for name in &presets {
                     println!("  {name}");
                 }
+            }
+        }
+        return ExitCode::SUCCESS;
+    }
+
+    // Check mute file — skip playback silently
+    if is_muted() {
+        match format {
+            OutputFormat::Json => {
+                let data = serde_json::json!({
+                    "sound": sound.as_deref()
+                        .or(file.as_deref())
+                        .unwrap_or("unknown"),
+                    "played": false,
+                    "muted": true,
+                });
+                let output = Output::success("agent-ping", data);
+                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            }
+            OutputFormat::Human => {
+                println!("[muted] Sounds are muted");
             }
         }
         return ExitCode::SUCCESS;
