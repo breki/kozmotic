@@ -1,6 +1,5 @@
 # TODO
 
-- Add colored error output using the `colored` crate
 - Add coverage enforcement with `cargo-llvm-cov`
   (per-module 95% thresholds)
 - Plan a CLI tool for Claude Code status line that
@@ -39,3 +38,5 @@
 - Update CLAUDE.md to use wrapper scripts
   (2026-03-25)
 - Add Cargo metadata (2026-03-25)
+- Colored error output — skipped, unnecessary
+  for agent-first CLI tools (2026-03-25)

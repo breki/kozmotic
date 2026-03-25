@@ -8,7 +8,7 @@ fn test_help() {
     cmd.arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Agent-friendly CLI tools"));
+        .stdout(predicate::str::contains("CLI toolkit for AI agents"));
 }
 
 #[test]
