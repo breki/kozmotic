@@ -43,6 +43,10 @@ Configured as the `command` in `settings.json`:
 - [x] Add a `/statusline-setup` skill that
   configures settings.json for the user
 - [x] Document in CLAUDE.md and architect skill
+- [x] Add widgets: duration, api-duration, tokens,
+  git-branch, git-status, directory, session,
+  rate-limit-7d, worktree, agent
+- [x] Add multi-line support (semicolon separator)
 
 ## Done
 

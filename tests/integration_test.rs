@@ -273,7 +273,7 @@ fn test_status_line_rate_limit() {
         .write_stdin(json)
         .assert()
         .success()
-        .stdout(predicate::str::contains("73.2%"));
+        .stdout(predicate::str::contains("5h 73%"));
 }
 
 #[test]
@@ -292,6 +292,136 @@ fn test_status_line_vim_mode() {
         .assert()
         .success()
         .stdout(predicate::str::contains("NORMAL"));
+}
+
+const FULL_STATUS_JSON: &str = r#"{
+    "model": { "id": "claude-opus-4-6", "display_name": "Opus 4.6" },
+    "context_window": {
+        "used_percentage": 42.5,
+        "total_input_tokens": 15234,
+        "total_output_tokens": 4521
+    },
+    "cost": {
+        "total_cost_usd": 1.23,
+        "total_duration_ms": 754000,
+        "total_api_duration_ms": 130000,
+        "total_lines_added": 150,
+        "total_lines_removed": 30
+    },
+    "workspace": { "current_dir": "/home/user/projects/kozmotic" },
+    "session_id": "abc123def456",
+    "agent": { "name": "security-reviewer" },
+    "worktree": { "name": "my-feature" }
+}"#;
+
+#[test]
+fn test_status_line_duration() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("duration")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("12m 34s"));
+}
+
+#[test]
+fn test_status_line_api_duration() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("api-duration")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2m 10s"));
+}
+
+#[test]
+fn test_status_line_tokens() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("tokens")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("15.2kin/4.5kout"));
+}
+
+#[test]
+fn test_status_line_directory() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("directory")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("kozmotic"));
+}
+
+#[test]
+fn test_status_line_session() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("session")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("abc123de"));
+}
+
+#[test]
+fn test_status_line_agent() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("agent")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("security-reviewer"));
+}
+
+#[test]
+fn test_status_line_worktree() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("worktree")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("my-feature"));
+}
+
+#[test]
+fn test_status_line_git_branch() {
+    // We're in a git repo, so this should return a branch name
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("git-branch")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("main"));
+}
+
+#[test]
+fn test_status_line_multiline() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("model,directory;context,cost")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opus 4.6"))
+        .stdout(predicate::str::contains("$1.23"));
 }
 
 #[test]
