@@ -238,6 +238,17 @@ fn git_file_counts() -> Option<GitFileCounts> {
     })
 }
 
+const DIM: &str = "\x1b[2m";
+const RESET: &str = "\x1b[0m";
+const CYAN: &str = "\x1b[36m";
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const RED: &str = "\x1b[31m";
+
+fn label(name: &str) -> String {
+    format!("{DIM}{name}{RESET}")
+}
+
 fn render_widget(name: &str, data: &SessionData) -> Option<String> {
     match name {
         "model" => {
@@ -250,60 +261,61 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
         "context" => {
             let pct = data.context_window.used_percentage;
             let color = if pct >= 80.0 {
-                "\x1b[31m" // red
+                RED
             } else if pct >= 50.0 {
-                "\x1b[33m" // yellow
+                YELLOW
             } else {
-                "\x1b[32m" // green
+                GREEN
             };
-            Some(format!("ctx {color}{pct:.1}%\x1b[0m"))
+            Some(format!("{} {color}{pct:.1}%{RESET}", label("ctx")))
         }
         "cost" => {
             let cost = data.cost.total_cost_usd;
-            Some(format!("cost ${cost:.2}"))
+            Some(format!("{} ${cost:.2}", label("cost")))
         }
         "lines" => {
             let added = data.cost.total_lines_added;
             let removed = data.cost.total_lines_removed;
-            Some(format!("+{added}/-{removed}"))
+            Some(format!("{GREEN}+{added}{RESET}/{RED}-{removed}{RESET}"))
         }
         "duration" => {
             let ms = data.cost.total_duration_ms;
-            Some(format!("time {}", format_duration_ms(ms)))
+            Some(format!("{} {}", label("time"), format_duration_ms(ms)))
         }
         "api-duration" => {
             let ms = data.cost.total_api_duration_ms;
-            Some(format!("api {}", format_duration_ms(ms)))
+            Some(format!("{} {}", label("api"), format_duration_ms(ms)))
         }
         "tokens" => {
             let input = data.context_window.total_input_tokens;
             let output = data.context_window.total_output_tokens;
             Some(format!(
-                "tok {} in / {} out",
+                "{} {} in / {} out",
+                label("tok"),
                 format_tokens(input),
                 format_tokens(output)
             ))
         }
-        "git-branch" => git_branch(),
+        "git-branch" => git_branch().map(|b| format!("{CYAN}{b}{RESET}")),
         "git-files" => {
             let counts = git_file_counts()?;
             let mut parts = Vec::new();
             if counts.staged > 0 {
-                parts.push(format!("\x1b[32m{}staged\x1b[0m", counts.staged));
+                parts.push(format!("{GREEN}{}staged{RESET}", counts.staged));
             }
             if counts.modified > 0 {
-                parts.push(format!("\x1b[33m{}mod\x1b[0m", counts.modified));
+                parts.push(format!("{YELLOW}{}mod{RESET}", counts.modified));
             }
             if counts.new > 0 {
-                parts.push(format!("\x1b[36m{}new\x1b[0m", counts.new));
+                parts.push(format!("{CYAN}{}new{RESET}", counts.new));
             }
             if counts.deleted > 0 {
-                parts.push(format!("\x1b[31m{}del\x1b[0m", counts.deleted));
+                parts.push(format!("{RED}{}del{RESET}", counts.deleted));
             }
             if parts.is_empty() {
-                Some("git (clean)".to_string())
+                Some(format!("{} (clean)", label("git")))
             } else {
-                Some(format!("git {}", parts.join(" ")))
+                Some(format!("{} {}", label("git"), parts.join(" ")))
             }
         }
         "git-status" => {
@@ -313,10 +325,10 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             } else {
                 let mut parts = Vec::new();
                 if staged > 0 {
-                    parts.push(format!("\x1b[32m+{staged}\x1b[0m"));
+                    parts.push(format!("{GREEN}+{staged}{RESET}"));
                 }
                 if modified > 0 {
-                    parts.push(format!("\x1b[33m~{modified}\x1b[0m"));
+                    parts.push(format!("{YELLOW}~{modified}{RESET}"));
                 }
                 Some(parts.join(" "))
             }
@@ -334,13 +346,14 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             if data.session_id.is_empty() {
                 None
             } else {
-                Some(data.session_id.chars().take(8).collect())
+                let short: String = data.session_id.chars().take(8).collect();
+                Some(format!("{} {short}", label("sid")))
             }
         }
         "rate-limit" => {
             let pct = data.rate_limits.five_hour.used_percentage;
             if pct > 0.0 {
-                Some(format!("5h {pct:.0}%"))
+                Some(format!("{} {pct:.0}%", label("5h")))
             } else {
                 None
             }
@@ -348,7 +361,7 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
         "rate-limit-7d" => {
             let pct = data.rate_limits.seven_day.used_percentage;
             if pct > 0.0 {
-                Some(format!("7d {pct:.0}%"))
+                Some(format!("{} {pct:.0}%", label("7d")))
             } else {
                 None
             }
@@ -364,14 +377,14 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             if data.worktree.name.is_empty() {
                 None
             } else {
-                Some(data.worktree.name.clone())
+                Some(format!("{} {}", label("wt"), data.worktree.name))
             }
         }
         "agent" => {
             if data.agent.name.is_empty() {
                 None
             } else {
-                Some(data.agent.name.clone())
+                Some(format!("{} {}", label("agent"), data.agent.name))
             }
         }
         _ => None,

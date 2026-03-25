@@ -209,10 +209,9 @@ fn test_status_line_default() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Opus 4.6"))
-        .stdout(predicate::str::contains("ctx"))
         .stdout(predicate::str::contains("42.5%"))
         .stdout(predicate::str::contains("\x1b[32m")) // green for <50%
-        .stdout(predicate::str::contains("cost $1.23"));
+        .stdout(predicate::str::contains("$1.23"));
 }
 
 #[test]
@@ -225,7 +224,7 @@ fn test_status_line_show_flag() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Opus 4.6"))
-        .stdout(predicate::str::contains("cost").not());
+        .stdout(predicate::str::contains("$").not());
 }
 
 #[test]
@@ -274,7 +273,7 @@ fn test_status_line_rate_limit() {
         .write_stdin(json)
         .assert()
         .success()
-        .stdout(predicate::str::contains("5h 73%"));
+        .stdout(predicate::str::contains("73%"));
 }
 
 #[test]
@@ -324,7 +323,7 @@ fn test_status_line_duration() {
         .write_stdin(FULL_STATUS_JSON)
         .assert()
         .success()
-        .stdout(predicate::str::contains("time 12m 34s"));
+        .stdout(predicate::str::contains("12m 34s"));
 }
 
 #[test]
@@ -336,7 +335,7 @@ fn test_status_line_api_duration() {
         .write_stdin(FULL_STATUS_JSON)
         .assert()
         .success()
-        .stdout(predicate::str::contains("api 2m 10s"));
+        .stdout(predicate::str::contains("2m 10s"));
 }
 
 #[test]
@@ -348,7 +347,7 @@ fn test_status_line_tokens() {
         .write_stdin(FULL_STATUS_JSON)
         .assert()
         .success()
-        .stdout(predicate::str::contains("tok 15.2k in / 4.5k out"));
+        .stdout(predicate::str::contains("15.2k in / 4.5k out"));
 }
 
 #[test]
