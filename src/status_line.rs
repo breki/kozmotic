@@ -249,6 +249,25 @@ fn label(name: &str) -> String {
     format!("{DIM}{name}{RESET}")
 }
 
+fn git_ahead_behind() -> Option<(usize, usize)> {
+    let output = Command::new("git")
+        .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = stdout.trim().split('\t').collect();
+    if parts.len() == 2 {
+        let ahead = parts[0].parse().unwrap_or(0);
+        let behind = parts[1].parse().unwrap_or(0);
+        Some((ahead, behind))
+    } else {
+        None
+    }
+}
+
 fn render_widget(name: &str, data: &SessionData) -> Option<String> {
     match name {
         "model" => {
@@ -297,6 +316,21 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             ))
         }
         "git-branch" => git_branch().map(|b| format!("{CYAN}{b}{RESET}")),
+        "git-ahead" => {
+            let (ahead, behind) = git_ahead_behind()?;
+            if ahead == 0 && behind == 0 {
+                None
+            } else {
+                let mut parts = Vec::new();
+                if ahead > 0 {
+                    parts.push(format!("{GREEN}↑{ahead}{RESET}"));
+                }
+                if behind > 0 {
+                    parts.push(format!("{RED}↓{behind}{RESET}"));
+                }
+                Some(parts.join(" "))
+            }
+        }
         "git-files" => {
             let counts = git_file_counts()?;
             let mut parts = Vec::new();

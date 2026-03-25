@@ -412,6 +412,18 @@ fn test_status_line_git_branch() {
 }
 
 #[test]
+fn test_status_line_git_ahead() {
+    // Just check it runs without error - actual counts depend on repo state
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("git-ahead")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_status_line_git_files() {
     // Create a temp file to guarantee at least one modified file
     let tmp = std::env::temp_dir().join("kozmotic-git-files-test");
