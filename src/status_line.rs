@@ -197,11 +197,11 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             } else {
                 "\x1b[32m" // green
             };
-            Some(format!("{color}{pct:.1}%\x1b[0m"))
+            Some(format!("ctx {color}{pct:.1}%\x1b[0m"))
         }
         "cost" => {
             let cost = data.cost.total_cost_usd;
-            Some(format!("${cost:.2}"))
+            Some(format!("cost ${cost:.2}"))
         }
         "lines" => {
             let added = data.cost.total_lines_added;
@@ -210,17 +210,17 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
         }
         "duration" => {
             let ms = data.cost.total_duration_ms;
-            Some(format_duration_ms(ms))
+            Some(format!("time {}", format_duration_ms(ms)))
         }
         "api-duration" => {
             let ms = data.cost.total_api_duration_ms;
-            Some(format_duration_ms(ms))
+            Some(format!("api {}", format_duration_ms(ms)))
         }
         "tokens" => {
             let input = data.context_window.total_input_tokens;
             let output = data.context_window.total_output_tokens;
             Some(format!(
-                "{}in/{}out",
+                "tok {}in/{}out",
                 format_tokens(input),
                 format_tokens(output)
             ))
