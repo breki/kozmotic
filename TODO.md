@@ -1,6 +1,5 @@
 # TODO
 
-- Why does the project need so many 3rd party dependencies?
 - Plan a CLI tool for Claude Code status line that
   allows the user to specify which things they want
   in the status line via command line parameters.
@@ -41,3 +40,5 @@
   for agent-first CLI tools (2026-03-25)
 - Add coverage reporting to xtask validate
   (no threshold yet, 57%) (2026-03-25)
+- Dependency audit: removed unused `anyhow`, all
+  remaining deps justified (2026-03-25)
