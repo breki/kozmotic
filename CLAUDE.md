@@ -18,7 +18,8 @@ when working with code in this repository.
 - **Conventional Commits**: Clear commit messages for clean
   history
 - **Ask before assuming**: When in doubt or when multiple
-  approaches exist, ask interactively rather than guessing
+  approaches exist, use the `AskUserQuestion` tool to
+  clarify rather than guessing
 - **80-column markdown**: Wrap all `.md` files at 80 columns
 
 ## Build & Development Commands
