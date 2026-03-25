@@ -2,25 +2,17 @@ use std::process::ExitCode;
 
 use crate::output::{Output, OutputFormat};
 
-const SOUND_BEEP: &[u8] = include_bytes!("../assets/sounds/beep.ogg");
-const SOUND_MESSAGE_SENT: &[u8] = include_bytes!("../assets/sounds/message-sent.ogg");
-const SOUND_MESSAGE: &[u8] = include_bytes!("../assets/sounds/message.ogg");
+const SOUND_STOP_CHIME: &[u8] = include_bytes!("../assets/sounds/stop-chime.mp3");
+const SOUND_NOTIFICATION_CHIME: &[u8] = include_bytes!("../assets/sounds/notification-chime.mp3");
+const SOUND_ERROR: &[u8] = include_bytes!("../assets/sounds/error.mp3");
 
-const PRESET_NAMES: &[&str] = &[
-    "PostToolUse",
-    "Stop",
-    "SubagentStop",
-    "TaskCompleted",
-    "Notification",
-];
+const PRESET_NAMES: &[&str] = &["Stop", "StopFailure", "Notification"];
 
 fn get_preset(name: &str) -> Option<&'static [u8]> {
     match name.to_lowercase().as_str() {
-        "posttooluse" => Some(SOUND_BEEP),
-        "stop" => Some(SOUND_MESSAGE_SENT),
-        "subagentstop" => Some(SOUND_MESSAGE_SENT),
-        "taskcompleted" => Some(SOUND_MESSAGE_SENT),
-        "notification" => Some(SOUND_MESSAGE),
+        "stop" => Some(SOUND_STOP_CHIME),
+        "stopfailure" => Some(SOUND_ERROR),
+        "notification" => Some(SOUND_NOTIFICATION_CHIME),
         _ => None,
     }
 }

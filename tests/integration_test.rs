@@ -56,10 +56,8 @@ fn test_agent_ping_list() {
         .assert()
         .success()
         .stdout(predicate::str::contains("\"status\": \"success\""))
-        .stdout(predicate::str::contains("PostToolUse"))
         .stdout(predicate::str::contains("Stop"))
-        .stdout(predicate::str::contains("SubagentStop"))
-        .stdout(predicate::str::contains("TaskCompleted"))
+        .stdout(predicate::str::contains("StopFailure"))
         .stdout(predicate::str::contains("Notification"));
 }
 
@@ -72,7 +70,7 @@ fn test_agent_ping_list_human() {
         .arg("--list")
         .assert()
         .success()
-        .stdout(predicate::str::contains("PostToolUse"))
+        .stdout(predicate::str::contains("Stop"))
         .stdout(predicate::str::contains("Notification"))
         .stdout(predicate::str::contains("status").not());
 }

@@ -32,7 +32,9 @@ and this project adheres to
   - Case-insensitive preset name matching
 - Structured error output via `Output::error()` with
   error codes on stderr
-- Three embedded CC0 sound effects from BigSoundBank.com
+- Embedded sound effects from Pixabay for Stop,
+  StopFailure, and Notification presets
+  (see `CREDITS.md`)
 
 ## [0.1.0] - 2026-02-15
 

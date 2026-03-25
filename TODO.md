@@ -1,7 +1,5 @@
 # TODO
 
-- Start dog-fooding the tools from this project in
-  the agent hooks
 - Add clippy lint config to `Cargo.toml`
   (`[lints.rust]` and `[lints.clippy]` sections)
 - Add `.cargo/config.toml` with cargo aliases
@@ -32,4 +30,6 @@
 - Add Claude Code Stop hook to run `cargo clippy`
   on modified files and `cargo test` (2026-03-25)
 - Update CLAUDE.md to reference AskUserQuestion tool
+  (2026-03-25)
+- Dog-food agent-ping in Stop and Notification hooks
   (2026-03-25)
