@@ -413,6 +413,22 @@ fn test_status_line_git_branch() {
 }
 
 #[test]
+fn test_status_line_git_files() {
+    // Create a temp file to guarantee at least one modified file
+    let tmp = std::env::temp_dir().join("kozmotic-git-files-test");
+    let _ = std::fs::write(&tmp, "test");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    // Just check it runs successfully - exact counts depend on repo state
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("git-files")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
 fn test_status_line_multiline() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line")

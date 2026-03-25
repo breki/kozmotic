@@ -179,6 +179,65 @@ fn git_status_counts() -> Option<(usize, usize)> {
     Some((staged_count, modified_count))
 }
 
+struct GitFileCounts {
+    staged: usize,
+    modified: usize,
+    new: usize,
+    deleted: usize,
+}
+
+fn git_file_counts() -> Option<GitFileCounts> {
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut staged = 0;
+    let mut modified = 0;
+    let mut new = 0;
+    let mut deleted = 0;
+    for line in stdout.lines() {
+        if line.len() < 2 {
+            continue;
+        }
+        let index = line.as_bytes()[0];
+        let worktree = line.as_bytes()[1];
+        // Untracked
+        if index == b'?' {
+            new += 1;
+            continue;
+        }
+        // Index (staged) changes
+        match index {
+            b'A' => staged += 1,
+            b'M' => staged += 1,
+            b'D' => {
+                staged += 1;
+                deleted += 1;
+            }
+            b'R' => staged += 1,
+            _ => {}
+        }
+        // Worktree (unstaged) changes
+        match worktree {
+            b'M' => modified += 1,
+            b'D' => {
+                deleted += 1;
+            }
+            _ => {}
+        }
+    }
+    Some(GitFileCounts {
+        staged,
+        modified,
+        new,
+        deleted,
+    })
+}
+
 fn render_widget(name: &str, data: &SessionData) -> Option<String> {
     match name {
         "model" => {
@@ -226,6 +285,27 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             ))
         }
         "git-branch" => git_branch(),
+        "git-files" => {
+            let counts = git_file_counts()?;
+            let mut parts = Vec::new();
+            if counts.staged > 0 {
+                parts.push(format!("\x1b[32m{}staged\x1b[0m", counts.staged));
+            }
+            if counts.modified > 0 {
+                parts.push(format!("\x1b[33m{}mod\x1b[0m", counts.modified));
+            }
+            if counts.new > 0 {
+                parts.push(format!("\x1b[36m{}new\x1b[0m", counts.new));
+            }
+            if counts.deleted > 0 {
+                parts.push(format!("\x1b[31m{}del\x1b[0m", counts.deleted));
+            }
+            if parts.is_empty() {
+                None
+            } else {
+                Some(format!("git {}", parts.join(" ")))
+            }
+        }
         "git-status" => {
             let (staged, modified) = git_status_counts()?;
             if staged == 0 && modified == 0 {
