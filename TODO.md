@@ -1,10 +1,10 @@
 # TODO
 
+- how to temporarily disable sounds for hooks?
 - Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
   keywords, categories)
 - Add colored error output using the `colored` crate
-- Add developer diary (`docs/developer/DIARY.md`)
 - Add coverage enforcement with `cargo-llvm-cov`
   (per-module 95% thresholds)
 - Plan a CLI tool for Claude Code status line that
@@ -31,3 +31,4 @@
 - Add clippy lint config to Cargo.toml (2026-03-25)
 - Add xtask crate with validate command and cargo
   aliases (2026-03-25)
+- Add developer diary (2026-03-25)
