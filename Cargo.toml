@@ -19,6 +19,14 @@ thiserror = "2.0"
 chrono = { version = "0.4", features = ["serde"] }
 rodio = { version = "0.21", default-features = false, features = ["playback", "wav", "mp3", "vorbis", "flac"] }
 
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+perf = { level = "deny", priority = -1 }
+cargo_common_metadata = "deny"
+multiple_crate_versions = "allow"
+
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"

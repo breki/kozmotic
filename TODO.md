@@ -1,7 +1,5 @@
 # TODO
 
-- Add clippy lint config to `Cargo.toml`
-  (`[lints.rust]` and `[lints.clippy]` sections)
 - Add `.cargo/config.toml` with cargo aliases
 - Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
@@ -33,3 +31,4 @@
   (2026-03-25)
 - Dog-food agent-ping in Stop and Notification hooks
   (2026-03-25)
+- Add clippy lint config to Cargo.toml (2026-03-25)
