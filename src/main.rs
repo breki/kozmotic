@@ -1,6 +1,7 @@
 mod agent_ping;
 mod output;
 mod self_install;
+mod status_line;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -10,6 +11,7 @@ use clap::{Args, Parser, Subcommand};
 use agent_ping::{AgentPingArgs, handle_agent_ping};
 use output::OutputFormat;
 use self_install::handle_self_install;
+use status_line::{StatusLineArgs, handle_status_line};
 
 #[derive(Parser)]
 #[command(name = "kozmotic")]
@@ -35,6 +37,17 @@ enum Commands {
     /// Manage the kozmotic installation
     #[command(name = "self", subcommand)]
     Self_(SelfCommands),
+    /// Format Claude Code session data for the status line
+    #[command(name = "status-line")]
+    StatusLine {
+        /// Widgets to show (comma-separated)
+        #[arg(long, default_value = "model,context,cost")]
+        show: String,
+
+        /// Separator between widgets
+        #[arg(long, default_value = " | ")]
+        separator: String,
+    },
     /// Play a notification sound (for hooks and alerts)
     #[command(name = "agent-ping")]
     AgentPing {
@@ -109,6 +122,9 @@ fn main() -> ExitCode {
                 }
             }
             ExitCode::SUCCESS
+        }
+        Some(Commands::StatusLine { show, separator }) => {
+            handle_status_line(StatusLineArgs { show, separator })
         }
         Some(Commands::Self_(SelfCommands::Install(args))) => {
             handle_self_install(&cli.format, args.target_dir)

@@ -28,18 +28,18 @@ Configured as the `command` in `settings.json`:
 
 ### Implementation plan
 
-- [ ] Add `StatusLine` variant to `Commands`
-- [ ] Parse stdin JSON (serde deserialize, only
+- [x] Add `StatusLine` variant to `Commands`
+- [x] Parse stdin JSON (serde deserialize, only
   the fields we need)
-- [ ] Define "widgets": model, context, cost,
-  rate-limit, lines-changed, vim-mode
-- [ ] `--show` flag: comma-separated widget list
+- [x] Define "widgets": model, context, cost, lines
+- [x] `--show` flag: comma-separated widget list
   (default: `model,context,cost`)
-- [ ] `--separator` flag (default: ` | `)
+- [x] `--separator` flag (default: ` | `)
 - [ ] Support ANSI colors for context % thresholds
   (green < 50%, yellow < 80%, red >= 80%)
-- [ ] Output a single line to stdout
-- [ ] Add integration tests with sample JSON input
+- [x] Output a single line to stdout
+- [x] Add integration tests with sample JSON input
+- [ ] Add rate-limit and vim-mode widgets
 - [ ] Add a `/statusline-setup` skill that
   configures settings.json for the user
 - [ ] Document in CLAUDE.md and architect skill

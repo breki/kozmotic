@@ -193,6 +193,57 @@ fn test_agent_ping_case_insensitive() {
         .stdout(predicate::str::contains("\"played\": false"));
 }
 
+// --- status-line tests ---
+
+const SAMPLE_STATUS_JSON: &str = r#"{
+    "model": { "id": "claude-opus-4-6", "display_name": "Opus 4.6" },
+    "context_window": { "used_percentage": 42.5, "remaining_percentage": 57.5 },
+    "cost": { "total_cost_usd": 1.23, "total_lines_added": 150, "total_lines_removed": 30 }
+}"#;
+
+#[test]
+fn test_status_line_default() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opus 4.6"))
+        .stdout(predicate::str::contains("42.5%"))
+        .stdout(predicate::str::contains("$1.23"));
+}
+
+#[test]
+fn test_status_line_show_flag() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("model")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opus 4.6"))
+        .stdout(predicate::str::contains("$").not());
+}
+
+#[test]
+fn test_status_line_custom_separator() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--separator")
+        .arg(" :: ")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(" :: "));
+}
+
+#[test]
+fn test_status_line_empty_stdin() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line").write_stdin("").assert().failure();
+}
+
 // --- self install tests ---
 
 fn temp_install_dir(name: &str) -> PathBuf {
