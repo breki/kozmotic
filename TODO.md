@@ -39,7 +39,7 @@ Configured as the `command` in `settings.json`:
   (green < 50%, yellow < 80%, red >= 80%)
 - [x] Output a single line to stdout
 - [x] Add integration tests with sample JSON input
-- [ ] Add rate-limit and vim-mode widgets
+- [x] Add rate-limit and vim-mode widgets
 - [ ] Add a `/statusline-setup` skill that
   configures settings.json for the user
 - [ ] Document in CLAUDE.md and architect skill

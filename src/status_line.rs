@@ -11,6 +11,10 @@ struct SessionData {
     context_window: ContextData,
     #[serde(default)]
     cost: CostData,
+    #[serde(default)]
+    rate_limits: RateLimitsData,
+    #[serde(default)]
+    vim: VimData,
 }
 
 #[derive(Deserialize, Default)]
@@ -33,6 +37,24 @@ struct CostData {
     total_lines_added: u64,
     #[serde(default)]
     total_lines_removed: u64,
+}
+
+#[derive(Deserialize, Default)]
+struct RateLimitsData {
+    #[serde(default)]
+    five_hour: RateLimitBucket,
+}
+
+#[derive(Deserialize, Default)]
+struct RateLimitBucket {
+    #[serde(default)]
+    used_percentage: f64,
+}
+
+#[derive(Deserialize, Default)]
+struct VimData {
+    #[serde(default)]
+    mode: String,
 }
 
 pub struct StatusLineArgs {
@@ -97,6 +119,21 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             let added = data.cost.total_lines_added;
             let removed = data.cost.total_lines_removed;
             Some(format!("+{added}/-{removed}"))
+        }
+        "rate-limit" => {
+            let pct = data.rate_limits.five_hour.used_percentage;
+            if pct > 0.0 {
+                Some(format!("rate {pct:.1}%"))
+            } else {
+                None
+            }
+        }
+        "vim" => {
+            if data.vim.mode.is_empty() {
+                None
+            } else {
+                Some(data.vim.mode.clone())
+            }
         }
         _ => None,
     }

@@ -257,6 +257,44 @@ fn test_status_line_context_red() {
 }
 
 #[test]
+fn test_status_line_rate_limit() {
+    let json = r#"{
+        "model": {},
+        "context_window": {},
+        "cost": {},
+        "rate_limits": {
+            "five_hour": { "used_percentage": 73.2 }
+        }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("rate-limit")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("73.2%"));
+}
+
+#[test]
+fn test_status_line_vim_mode() {
+    let json = r#"{
+        "model": {},
+        "context_window": {},
+        "cost": {},
+        "vim": { "mode": "NORMAL" }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("vim")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("NORMAL"));
+}
+
+#[test]
 fn test_status_line_empty_stdin() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line").write_stdin("").assert().failure();
