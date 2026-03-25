@@ -1,7 +1,5 @@
 # TODO
 
-- Add Cargo metadata (authors, license, repository,
-  keywords, categories)
 - Add colored error output using the `colored` crate
 - Add coverage enforcement with `cargo-llvm-cov`
   (per-module 95% thresholds)
@@ -40,3 +38,4 @@
 - Add test profile optimization (2026-03-25)
 - Update CLAUDE.md to use wrapper scripts
   (2026-03-25)
+- Add Cargo metadata (2026-03-25)
