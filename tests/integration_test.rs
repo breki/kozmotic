@@ -210,6 +210,7 @@ fn test_status_line_default() {
         .success()
         .stdout(predicate::str::contains("Opus 4.6"))
         .stdout(predicate::str::contains("42.5%"))
+        .stdout(predicate::str::contains("\x1b[32m")) // green for <50%
         .stdout(predicate::str::contains("$1.23"));
 }
 
@@ -236,6 +237,23 @@ fn test_status_line_custom_separator() {
         .assert()
         .success()
         .stdout(predicate::str::contains(" :: "));
+}
+
+#[test]
+fn test_status_line_context_red() {
+    let json = r#"{
+        "model": { "id": "x", "display_name": "X" },
+        "context_window": { "used_percentage": 85.0 },
+        "cost": {}
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("context")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\x1b[31m")); // red
 }
 
 #[test]

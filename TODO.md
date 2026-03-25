@@ -35,7 +35,7 @@ Configured as the `command` in `settings.json`:
 - [x] `--show` flag: comma-separated widget list
   (default: `model,context,cost`)
 - [x] `--separator` flag (default: ` | `)
-- [ ] Support ANSI colors for context % thresholds
+- [x] Support ANSI colors for context % thresholds
   (green < 50%, yellow < 80%, red >= 80%)
 - [x] Output a single line to stdout
 - [x] Add integration tests with sample JSON input

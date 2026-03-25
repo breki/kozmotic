@@ -80,7 +80,14 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
         }
         "context" => {
             let pct = data.context_window.used_percentage;
-            Some(format!("{pct:.1}%"))
+            let color = if pct >= 80.0 {
+                "\x1b[31m" // red
+            } else if pct >= 50.0 {
+                "\x1b[33m" // yellow
+            } else {
+                "\x1b[32m" // green
+            };
+            Some(format!("{color}{pct:.1}%\x1b[0m"))
         }
         "cost" => {
             let cost = data.cost.total_cost_usd;
