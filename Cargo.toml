@@ -30,6 +30,9 @@ perf = { level = "deny", priority = -1 }
 cargo_common_metadata = "deny"
 multiple_crate_versions = "allow"
 
+[profile.test]
+opt-level = 1
+
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"

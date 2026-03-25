@@ -24,18 +24,22 @@ when working with code in this repository.
 
 ## Build & Development Commands
 
-- `cargo xtask validate` — run all checks (fmt +
-  clippy + test) in one step
-- `cargo build` — build the project
-- `cargo run -- <args>` — run locally
-  (e.g., `cargo run -- agent-ping --sound Stop`)
-- `cargo test` — run all tests (unit + integration)
-- `cargo test <test_name>` — run a single test
-  (e.g., `cargo test test_example_json_output`)
-- `cargo fmt --all -- --check` — check formatting
-- `cargo fmt` — auto-format code
-- `cargo clippy --all-targets -- -D warnings` — lint
-  (treats warnings as errors)
+Use the wrapper scripts in `scripts/` instead of
+calling cargo directly. This makes permission
+control easier via `settings.local.json`.
+
+- `bash scripts/validate.sh` — run all checks
+  (fmt + clippy + test) in one step
+- `bash scripts/build.sh` — build the project
+- `bash scripts/run.sh <args>` — run locally
+  (e.g., `bash scripts/run.sh agent-ping --sound Stop`)
+- `bash scripts/test.sh` — run all tests
+- `bash scripts/test.sh <test_name>` — run a single
+  test
+- `bash scripts/fmt.sh` — auto-format code
+- `bash scripts/clippy.sh` — lint (warnings as errors)
+- `bash scripts/self-install.sh` — install binary to
+  `~/.claude/bin/`
 
 ## Architecture
 
@@ -95,7 +99,7 @@ Rust edition is 2024. Requires stable toolchain.
 ## Acceptance Criteria
 
 Before completing any task, run
-`cargo xtask validate`, which checks:
+`bash scripts/validate.sh`, which checks:
 
 1. **Formatting**: `cargo fmt --all -- --check`
 2. **No warnings**:

@@ -1,6 +1,5 @@
 # TODO
 
-- Add test profile optimization (`opt-level = 1`)
 - Add Cargo metadata (authors, license, repository,
   keywords, categories)
 - Add colored error output using the `colored` crate
@@ -37,4 +36,7 @@
   ~/.claude/settings.json, skills in
   ~/.claude/skills/ (2026-03-25)
 - Add wrapper scripts for permission control
+  (2026-03-25)
+- Add test profile optimization (2026-03-25)
+- Update CLAUDE.md to use wrapper scripts
   (2026-03-25)
