@@ -7,33 +7,6 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.sh\"",
             "timeout": 120
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/bin/kozmotic agent-ping --sound Stop",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "StopFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/bin/kozmotic agent-ping --sound StopFailure",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/bin/kozmotic agent-ping --sound Notification",
-            "timeout": 10
           }
         ]
       }
