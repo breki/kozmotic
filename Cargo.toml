@@ -3,7 +3,7 @@ members = [".", "xtask"]
 
 [package]
 name = "kozmotic"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["Igor Brejc"]
 description = "Portable CLI toolkit for AI agents with JSON output, sound notifications, and dev automation"
