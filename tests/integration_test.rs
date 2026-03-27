@@ -412,6 +412,18 @@ fn test_status_line_git_branch() {
 }
 
 #[test]
+fn test_status_line_api_status() {
+    // Just check it runs without error - actual status depends on Anthropic
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("api-status")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_status_line_git_ahead() {
     // Just check it runs without error - actual counts depend on repo state
     let mut cmd = cargo_bin_cmd!("kozmotic");

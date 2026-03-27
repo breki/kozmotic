@@ -1,9 +1,13 @@
-# TODO
+/# TODO
 
+- Split the status line widgets into their own modules. 
+- Provide a CLI switch for right-aligning certain status line widgets.
 - Update README with new features and installation instructions.
 
 ## Done
 
+- Add api-status widget with cached HTTP fetch
+  from status.claude.com (2 min TTL) (2026-03-27)
 - Install /statusline-setup and /sound skills
   globally at ~/.claude/skills/ (2026-03-26)
 - Add dim labels and color to status line widgets

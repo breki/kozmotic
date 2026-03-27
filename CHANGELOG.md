@@ -14,8 +14,9 @@ and this project adheres to
 
 - `status-line` subcommand for Claude Code status
   bar with configurable widgets (model, context %,
-  cost, lines, rate-limit, vim mode) and ANSI
-  color-coded context percentage
+  cost, lines, rate-limit, vim mode, git-branch,
+  git-files, git-ahead, api-status, and more) with
+  ANSI color-coded output and multi-line support
 - Mute-file support for `agent-ping`: create
   `~/.claude/.mute-sounds` to silence hook sounds
   without restarting the session (`/sound` skill)
