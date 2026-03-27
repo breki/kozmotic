@@ -1,5 +1,6 @@
 /# TODO
 
+- Introduce semantic versioning, release notes and Github releases. 
 - Split the status line widgets into their own modules. 
 - Provide a CLI switch for right-aligning certain status line widgets.
 - Update README with new features and installation instructions.
