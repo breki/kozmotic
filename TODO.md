@@ -1,12 +1,16 @@
 /# TODO
 
-- Introduce semantic versioning, release notes and Github releases. 
+- The release should be binary-only + user documentation, separate for each OS. 
 - Split the status line widgets into their own modules. 
 - Provide a CLI switch for right-aligning certain status line widgets.
 - Update README with new features and installation instructions.
 
 ## Done
 
+- Fix Release workflow failure: git-branch test
+  assumed `main` branch but tag checkout uses
+  detached HEAD; also aligned CI clippy with
+  `--all-targets` (2026-03-29)
 - Add api-status widget with cached HTTP fetch
   from status.claude.com (2 min TTL) (2026-03-27)
 - Install /statusline-setup and /sound skills
