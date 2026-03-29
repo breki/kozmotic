@@ -20,15 +20,23 @@ jobs:
         rust: [stable]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
+      - name: Install Rust
+        run: rustup toolchain install ${{ matrix.rust }} --profile minimal --no-self-update
+      - name: Set default toolchain
+        run: rustup default ${{ matrix.rust }}
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: >
           sudo apt-get update &&
           sudo apt-get install -y libasound2-dev
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - name: Run tests
         run: cargo test --verbose
 
@@ -37,9 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --no-self-update
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -48,14 +55,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component clippy --no-self-update
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: >
           sudo apt-get update &&
           sudo apt-get install -y libasound2-dev
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
