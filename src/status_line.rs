@@ -3,33 +3,34 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::SystemTime;
 
+use chrono::{DateTime, Local};
 use serde::Deserialize;
 
 #[derive(Deserialize, Default)]
 struct SessionData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     model: ModelData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     context_window: ContextData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     cost: CostData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     rate_limits: RateLimitsData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     vim: VimData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     workspace: WorkspaceData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     session_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     agent: AgentData,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     worktree: WorktreeData,
 }
 
 #[derive(Deserialize, Default)]
 struct ModelData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     display_name: String,
 }
 
@@ -69,29 +70,58 @@ struct RateLimitsData {
 struct RateLimitBucket {
     #[serde(default)]
     used_percentage: f64,
+    /// Unix timestamp (seconds) when the bucket resets. 0 when absent.
+    /// Claude Code may send either an integer epoch or an RFC3339 string.
+    #[serde(default, deserialize_with = "deserialize_resets_at")]
+    resets_at: i64,
+}
+
+fn deserialize_resets_at<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    match Option::<Value>::deserialize(deserializer)? {
+        None | Some(Value::Null) => Ok(0),
+        Some(Value::Number(n)) => Ok(n.as_i64().unwrap_or(0)),
+        Some(Value::String(s)) => Ok(parse_rfc3339(&s).unwrap_or(0)),
+        _ => Ok(0),
+    }
+}
+
+/// Deserialize a value, treating JSON `null` as the type's default.
+/// Claude Code sends `null` for optional fields like `resets_at` or
+/// `worktree` instead of omitting them, which would otherwise fail
+/// on non-`Option` fields.
+fn null_as_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Deserialize, Default)]
 struct VimData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     mode: String,
 }
 
 #[derive(Deserialize, Default)]
 struct WorkspaceData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     current_dir: String,
 }
 
 #[derive(Deserialize, Default)]
 struct AgentData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     name: String,
 }
 
 #[derive(Deserialize, Default)]
 struct WorktreeData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     name: String,
 }
 
@@ -103,14 +133,14 @@ pub struct StatusLineArgs {
 pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() || input.trim().is_empty() {
-        eprintln!("Error: no input on stdin");
+        report_error("no input on stdin");
         return ExitCode::FAILURE;
     }
 
     let data: SessionData = match serde_json::from_str(&input) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("Error: invalid JSON: {e}");
+            report_error(&format!("invalid JSON: {e}"));
             return ExitCode::FAILURE;
         }
     };
@@ -131,11 +161,104 @@ pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Print a diagnostic that's visible in the Claude Code status line
+/// (stdout) and also logged to stderr for terminal invocations. A
+/// silent failure makes the status line disappear entirely, which is
+/// almost always worse than showing what went wrong.
+fn report_error(msg: &str) {
+    eprintln!("Error: {msg}");
+    println!("{RED}status-line: {msg}{RESET}");
+}
+
 fn format_duration_ms(ms: u64) -> String {
     let secs = ms / 1000;
     let mins = secs / 60;
     let secs = secs % 60;
     format!("{mins}m {secs}s")
+}
+
+/// Parse an RFC3339 UTC timestamp into a Unix timestamp (seconds).
+///
+/// Accepts forms like `2026-04-20T15:04:05Z`, `...T15:04:05.123Z`,
+/// or with a `+00:00` / `-HH:MM` offset. Non-UTC offsets are applied.
+fn parse_rfc3339(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if s.len() < 19 {
+        return None;
+    }
+    let b = s.as_bytes();
+    // YYYY-MM-DDTHH:MM:SS
+    if b[4] != b'-' || b[7] != b'-' || (b[10] != b'T' && b[10] != b' ') {
+        return None;
+    }
+    if b[13] != b':' || b[16] != b':' {
+        return None;
+    }
+    let year: i64 = s.get(0..4)?.parse().ok()?;
+    let month: u32 = s.get(5..7)?.parse().ok()?;
+    let day: u32 = s.get(8..10)?.parse().ok()?;
+    let hour: i64 = s.get(11..13)?.parse().ok()?;
+    let minute: i64 = s.get(14..16)?.parse().ok()?;
+    let second: i64 = s.get(17..19)?.parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+
+    // Skip optional fractional seconds.
+    let mut i = 19;
+    if i < b.len() && b[i] == b'.' {
+        i += 1;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+    }
+
+    // Parse offset.
+    let mut offset_secs: i64 = 0;
+    if i < b.len() {
+        match b[i] {
+            b'Z' | b'z' => {}
+            b'+' | b'-' => {
+                let sign: i64 = if b[i] == b'-' { -1 } else { 1 };
+                let oh: i64 = s.get(i + 1..i + 3)?.parse().ok()?;
+                let om: i64 = if b.len() > i + 3 && b[i + 3] == b':' {
+                    s.get(i + 4..i + 6)?.parse().ok()?
+                } else {
+                    s.get(i + 3..i + 5)?.parse().ok()?
+                };
+                offset_secs = sign * (oh * 3600 + om * 60);
+            }
+            _ => return None,
+        }
+    }
+
+    let days = days_from_civil(year, month, day);
+    let epoch = days * 86400 + hour * 3600 + minute * 60 + second - offset_secs;
+    Some(epoch)
+}
+
+/// Howard Hinnant's days-from-civil algorithm. Returns days since
+/// 1970-01-01 (can be negative).
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let m = m as i64;
+    let d = d as i64;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+/// Format a Unix timestamp (seconds) as a local datetime using the
+/// given `strftime`-style pattern. Returns `None` when the timestamp
+/// is absent (`0`) or out of range.
+fn format_reset(resets_at: i64, fmt: &str) -> Option<String> {
+    if resets_at == 0 {
+        return None;
+    }
+    let dt: DateTime<Local> = DateTime::from_timestamp(resets_at, 0)?.with_timezone(&Local);
+    Some(dt.format(fmt).to_string())
 }
 
 fn format_tokens(count: u64) -> String {
@@ -320,6 +443,19 @@ fn git_ahead_behind() -> Option<(usize, usize)> {
     }
 }
 
+fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Option<String> {
+    let pct = bucket.used_percentage;
+    let has_reset = bucket.resets_at != 0;
+    if pct <= 0.0 && !has_reset {
+        return None;
+    }
+    let mut out = format!("{} {pct:.0}%", label(lbl));
+    if let Some(when) = format_reset(bucket.resets_at, reset_fmt) {
+        out.push_str(&format!(" (→{when})"));
+    }
+    Some(out)
+}
+
 fn render_widget(name: &str, data: &SessionData) -> Option<String> {
     match name {
         "model" => {
@@ -437,20 +573,12 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             }
         }
         "rate-limit" => {
-            let pct = data.rate_limits.five_hour.used_percentage;
-            if pct > 0.0 {
-                Some(format!("{} {pct:.0}%", label("5h")))
-            } else {
-                None
-            }
+            let bucket = &data.rate_limits.five_hour;
+            render_rate_limit("5h", bucket, "%H:%M")
         }
         "rate-limit-7d" => {
-            let pct = data.rate_limits.seven_day.used_percentage;
-            if pct > 0.0 {
-                Some(format!("{} {pct:.0}%", label("7d")))
-            } else {
-                None
-            }
+            let bucket = &data.rate_limits.seven_day;
+            render_rate_limit("7d", bucket, "%a %H:%M")
         }
         "vim" => {
             if data.vim.mode.is_empty() {
@@ -485,5 +613,97 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             Some(format!("{} {color}{symbol}{RESET}", label("api")))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_rfc3339_utc_z() {
+        assert_eq!(parse_rfc3339("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_rfc3339("1970-01-01T00:00:01Z"), Some(1));
+        assert_eq!(parse_rfc3339("2026-04-20T00:00:00Z"), Some(1_776_643_200));
+    }
+
+    #[test]
+    fn parse_rfc3339_fractional() {
+        assert_eq!(
+            parse_rfc3339("2026-04-20T00:00:00.123Z"),
+            Some(1_776_643_200)
+        );
+    }
+
+    #[test]
+    fn parse_rfc3339_offset() {
+        // 2026-04-20T02:00:00+02:00 == 2026-04-20T00:00:00Z
+        assert_eq!(
+            parse_rfc3339("2026-04-20T02:00:00+02:00"),
+            Some(1_776_643_200)
+        );
+        assert_eq!(
+            parse_rfc3339("2026-04-19T22:00:00-02:00"),
+            Some(1_776_643_200)
+        );
+    }
+
+    #[test]
+    fn parse_rfc3339_invalid() {
+        assert_eq!(parse_rfc3339(""), None);
+        assert_eq!(parse_rfc3339("not a date"), None);
+        assert_eq!(parse_rfc3339("2026/04/20T00:00:00Z"), None);
+    }
+
+    #[test]
+    fn format_reset_absent() {
+        assert_eq!(format_reset(0, "%H:%M"), None);
+    }
+
+    #[test]
+    fn format_reset_renders_local() {
+        // Just verify it produces a non-empty string in the expected shape.
+        let out = format_reset(1_776_711_600, "%H:%M").expect("should render");
+        assert_eq!(out.len(), 5);
+        assert_eq!(&out[2..3], ":");
+    }
+
+    #[test]
+    fn accepts_null_resets_at() {
+        let json = r#"{"rate_limits":{"five_hour":{"used_percentage":73.2,"resets_at":null}}}"#;
+        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        assert_eq!(data.rate_limits.five_hour.used_percentage, 73.2);
+        assert_eq!(data.rate_limits.five_hour.resets_at, 0);
+    }
+
+    #[test]
+    fn accepts_integer_resets_at() {
+        let json = r#"{"rate_limits":{"five_hour":{"used_percentage":51,"resets_at":1776711600}}}"#;
+        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        assert_eq!(data.rate_limits.five_hour.resets_at, 1_776_711_600);
+    }
+
+    #[test]
+    fn accepts_rfc3339_resets_at() {
+        let json = r#"{"rate_limits":{"five_hour":{"resets_at":"2026-04-20T00:00:00Z"}}}"#;
+        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        assert_eq!(data.rate_limits.five_hour.resets_at, 1_776_643_200);
+    }
+
+    #[test]
+    fn render_rate_limit_hidden_when_empty() {
+        let bucket = RateLimitBucket::default();
+        assert_eq!(render_rate_limit("5h", &bucket, "%H:%M"), None);
+    }
+
+    #[test]
+    fn render_rate_limit_shown_with_only_reset() {
+        let bucket = RateLimitBucket {
+            used_percentage: 0.0,
+            resets_at: 4_102_444_800,
+        };
+        let out = render_rate_limit("5h", &bucket, "%H:%M").expect("should render");
+        assert!(out.contains("0%"));
+        assert!(out.contains("→"));
     }
 }

@@ -10,6 +10,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `status-line` now surfaces a red diagnostic on
+  stdout (in addition to stderr) when stdin is empty
+  or the session JSON is malformed, so failures are
+  visible in the Claude Code status bar instead of
+  silently collapsing to an empty line.
+
+### Changed
+
+- `rate-limit` and `rate-limit-7d` status-line widgets
+  now append the local datetime when the quota window
+  resets, e.g. `5h 53% (→21:00)` and
+  `7d 71% (→Thu 21:00)`. Accepts `resets_at` as either
+  a Unix timestamp integer, an RFC3339 string, or
+  `null`. The widgets render whenever `resets_at` is
+  present, even at 0% usage.
+
 ## [1.0.0] - 2026-03-27
 
 ### Added
