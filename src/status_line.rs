@@ -171,10 +171,20 @@ fn report_error(msg: &str) {
 }
 
 fn format_duration_ms(ms: u64) -> String {
-    let secs = ms / 1000;
-    let mins = secs / 60;
-    let secs = secs % 60;
-    format!("{mins}m {secs}s")
+    let total_secs = ms / 1000;
+    let total_mins = total_secs / 60;
+    let secs = total_secs % 60;
+    let mins = total_mins % 60;
+    let hours = total_mins / 60;
+    if hours >= 24 {
+        let days = hours / 24;
+        let hours = hours % 24;
+        format!("{days}d {hours}h")
+    } else if hours > 0 {
+        format!("{hours}h {mins}m")
+    } else {
+        format!("{mins}m {secs}s")
+    }
 }
 
 /// Parse an RFC3339 UTC timestamp into a Unix timestamp (seconds).
@@ -619,6 +629,27 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_duration_under_one_hour() {
+        assert_eq!(format_duration_ms(0), "0m 0s");
+        assert_eq!(format_duration_ms(1_500), "0m 1s");
+        assert_eq!(format_duration_ms(65_000), "1m 5s");
+        assert_eq!(format_duration_ms(59 * 60_000 + 59_000), "59m 59s");
+    }
+
+    #[test]
+    fn format_duration_hours() {
+        assert_eq!(format_duration_ms(60 * 60_000), "1h 0m");
+        assert_eq!(format_duration_ms(90 * 60_000), "1h 30m");
+        assert_eq!(format_duration_ms(23 * 3_600_000 + 59 * 60_000), "23h 59m");
+    }
+
+    #[test]
+    fn format_duration_days() {
+        assert_eq!(format_duration_ms(24 * 3_600_000), "1d 0h");
+        assert_eq!(format_duration_ms(3096 * 60_000 + 2_000), "2d 3h");
+    }
 
     #[test]
     fn parse_rfc3339_utc_z() {

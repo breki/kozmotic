@@ -20,6 +20,10 @@ and this project adheres to
 
 ### Changed
 
+- `duration` and `api-duration` status-line widgets now
+  scale to hours and days for long sessions, rendering
+  `Xh Ym` past one hour and `Xd Yh` past one day instead
+  of unbounded minutes (e.g. `3096m 2s` → `2d 3h`).
 - `rate-limit` and `rate-limit-7d` status-line widgets
   now append the local datetime when the quota window
   resets, e.g. `5h 53% (→21:00)` and
