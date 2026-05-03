@@ -40,6 +40,10 @@ status-line` for the Claude Code status bar.
    - `git-lines` — "Added/deleted line counts in
      the current uncommitted changeset
      (e.g. +42/-7)"
+   - `last-commit` — "Relative age of HEAD with
+     minute granularity (e.g. last 12m, last 2h 15m)"
+   - `cost-rate` — "Session burn rate in $/hour
+     (e.g. $4.20/h)"
    - `rate-limit` — "5-hour API rate limit
      usage % (Pro/Max only)"
    - `vim` — "Vim mode indicator

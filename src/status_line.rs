@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
@@ -145,13 +146,14 @@ pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
         }
     };
 
+    let git = GitContext::default();
     // Support multi-line: split on ";" to get lines
     let lines: Vec<&str> = args.show.split(';').collect();
     for line_spec in &lines {
         let widgets: Vec<&str> = line_spec.split(',').map(|s| s.trim()).collect();
         let parts: Vec<String> = widgets
             .iter()
-            .filter_map(|w| render_widget(w, &data))
+            .filter_map(|w| render_widget(w, &data, &git))
             .collect();
         if !parts.is_empty() {
             println!("{}", parts.join(&args.separator));
@@ -168,6 +170,23 @@ pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
 fn report_error(msg: &str) {
     eprintln!("Error: {msg}");
     println!("{RED}status-line: {msg}{RESET}");
+}
+
+/// Compact age formatter with minute granularity: "5m", "1h 5m",
+/// "2d 3h". Used by `last-commit` where seconds are too noisy.
+fn format_age_compact(secs: u64) -> String {
+    let mins = secs / 60;
+    let hours = mins / 60;
+    if hours >= 24 {
+        let days = hours / 24;
+        let h = hours % 24;
+        format!("{days}d {h}h")
+    } else if hours > 0 {
+        let m = mins % 60;
+        format!("{hours}h {m}m")
+    } else {
+        format!("{mins}m")
+    }
 }
 
 fn format_duration_ms(ms: u64) -> String {
@@ -281,39 +300,6 @@ fn format_tokens(count: u64) -> String {
     }
 }
 
-fn git_branch() -> Option<String> {
-    Command::new("git")
-        .args(["branch", "--show-current"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn git_status_counts() -> Option<(usize, usize)> {
-    let staged = Command::new("git")
-        .args(["diff", "--cached", "--numstat"])
-        .output()
-        .ok()?;
-    let modified = Command::new("git")
-        .args(["diff", "--numstat"])
-        .output()
-        .ok()?;
-    if !staged.status.success() {
-        return None;
-    }
-    let staged_count = String::from_utf8_lossy(&staged.stdout)
-        .lines()
-        .filter(|l| !l.is_empty())
-        .count();
-    let modified_count = String::from_utf8_lossy(&modified.stdout)
-        .lines()
-        .filter(|l| !l.is_empty())
-        .count();
-    Some((staged_count, modified_count))
-}
-
 struct GitFileCounts {
     staged: usize,
     modified: usize,
@@ -321,83 +307,154 @@ struct GitFileCounts {
     deleted: usize,
 }
 
-fn git_file_counts() -> Option<GitFileCounts> {
-    let output = Command::new("git")
-        .args(["status", "--porcelain"])
-        .output()
-        .ok()?;
+/// Lazily-cached git command results, shared across all git-* widgets
+/// in a single status-line invocation. Each underlying `git` process
+/// is spawned at most once per render.
+#[derive(Default)]
+struct GitContext {
+    branch: OnceCell<Option<String>>,
+    ahead_behind: OnceCell<Option<(usize, usize)>>,
+    porcelain: OnceCell<Option<String>>,
+    numstat_unstaged: OnceCell<Option<String>>,
+    numstat_staged: OnceCell<Option<String>>,
+    last_commit: OnceCell<Option<String>>,
+}
+
+fn run_git(args: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut staged = 0;
-    let mut modified = 0;
-    let mut new = 0;
-    let mut deleted = 0;
-    for line in stdout.lines() {
-        if line.len() < 2 {
-            continue;
-        }
-        let index = line.as_bytes()[0];
-        let worktree = line.as_bytes()[1];
-        // Untracked
-        if index == b'?' {
-            new += 1;
-            continue;
-        }
-        // Index (staged) changes
-        match index {
-            b'A' => staged += 1,
-            b'M' => staged += 1,
-            b'D' => {
-                staged += 1;
-                deleted += 1;
-            }
-            b'R' => staged += 1,
-            _ => {}
-        }
-        // Worktree (unstaged) changes
-        match worktree {
-            b'M' => modified += 1,
-            b'D' => {
-                deleted += 1;
-            }
-            _ => {}
-        }
-    }
-    Some(GitFileCounts {
-        staged,
-        modified,
-        new,
-        deleted,
-    })
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Sum added/deleted line counts across both staged and unstaged
-/// changes. Binary files (numstat rows starting with `-`) are skipped.
-fn git_diff_lines() -> Option<(usize, usize)> {
-    let mut added = 0usize;
-    let mut deleted = 0usize;
-    for args in [
-        ["diff", "--numstat"].as_slice(),
-        ["diff", "--cached", "--numstat"].as_slice(),
-    ] {
-        let output = Command::new("git").args(args).output().ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            let mut cols = line.split('\t');
-            let a = cols.next().unwrap_or("");
-            let d = cols.next().unwrap_or("");
-            if a == "-" || d == "-" {
+impl GitContext {
+    fn branch(&self) -> Option<&str> {
+        self.branch
+            .get_or_init(|| {
+                run_git(&["branch", "--show-current"])
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
+            .as_deref()
+    }
+
+    fn ahead_behind(&self) -> Option<(usize, usize)> {
+        *self.ahead_behind.get_or_init(|| {
+            let stdout = run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])?;
+            let parts: Vec<&str> = stdout.trim().split('\t').collect();
+            if parts.len() == 2 {
+                Some((parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0)))
+            } else {
+                None
+            }
+        })
+    }
+
+    fn porcelain(&self) -> Option<&str> {
+        self.porcelain
+            .get_or_init(|| run_git(&["status", "--porcelain"]))
+            .as_deref()
+    }
+
+    fn numstat_unstaged(&self) -> Option<&str> {
+        self.numstat_unstaged
+            .get_or_init(|| run_git(&["diff", "--numstat"]))
+            .as_deref()
+    }
+
+    fn numstat_staged(&self) -> Option<&str> {
+        self.numstat_staged
+            .get_or_init(|| run_git(&["diff", "--cached", "--numstat"]))
+            .as_deref()
+    }
+
+    /// Age of HEAD as a compact duration string with minute
+    /// granularity ("12m", "2h 15m", "3d 4h"). Computed from the
+    /// author timestamp; returns `None` when not in a repo.
+    fn last_commit(&self) -> Option<&str> {
+        self.last_commit
+            .get_or_init(|| {
+                let raw = run_git(&["log", "-1", "--format=%at"])?;
+                let ts: i64 = raw.trim().parse().ok()?;
+                let now = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .ok()?
+                    .as_secs() as i64;
+                let age_secs = (now - ts).max(0) as u64;
+                Some(format_age_compact(age_secs))
+            })
+            .as_deref()
+    }
+
+    fn file_counts(&self) -> Option<GitFileCounts> {
+        let stdout = self.porcelain()?;
+        let mut staged = 0;
+        let mut modified = 0;
+        let mut new = 0;
+        let mut deleted = 0;
+        for line in stdout.lines() {
+            if line.len() < 2 {
                 continue;
             }
-            added += a.parse::<usize>().unwrap_or(0);
-            deleted += d.parse::<usize>().unwrap_or(0);
+            let index = line.as_bytes()[0];
+            let worktree = line.as_bytes()[1];
+            if index == b'?' {
+                new += 1;
+                continue;
+            }
+            match index {
+                b'A' | b'M' | b'R' => staged += 1,
+                b'D' => {
+                    staged += 1;
+                    deleted += 1;
+                }
+                _ => {}
+            }
+            match worktree {
+                b'M' => modified += 1,
+                b'D' => deleted += 1,
+                _ => {}
+            }
         }
+        Some(GitFileCounts {
+            staged,
+            modified,
+            new,
+            deleted,
+        })
     }
-    Some((added, deleted))
+
+    /// (staged_files_changed, unstaged_files_changed) — counted from
+    /// numstat row counts, not porcelain, to match historical behavior.
+    fn status_counts(&self) -> Option<(usize, usize)> {
+        let staged = self.numstat_staged()?;
+        let modified = self.numstat_unstaged()?;
+        let staged_count = staged.lines().filter(|l| !l.is_empty()).count();
+        let modified_count = modified.lines().filter(|l| !l.is_empty()).count();
+        Some((staged_count, modified_count))
+    }
+
+    /// Sum added/deleted line counts across both staged and unstaged
+    /// changes. Binary files (numstat rows starting with `-`) are
+    /// skipped.
+    fn diff_lines(&self) -> Option<(usize, usize)> {
+        let mut added = 0usize;
+        let mut deleted = 0usize;
+        for stdout in [self.numstat_unstaged()?, self.numstat_staged()?] {
+            for line in stdout.lines() {
+                let mut cols = line.split('\t');
+                let a = cols.next().unwrap_or("");
+                let d = cols.next().unwrap_or("");
+                if a == "-" || d == "-" {
+                    continue;
+                }
+                added += a.parse::<usize>().unwrap_or(0);
+                deleted += d.parse::<usize>().unwrap_or(0);
+            }
+        }
+        Some((added, deleted))
+    }
 }
 
 const STATUS_CACHE_FILE: &str = "kozmotic-api-status.json";
@@ -461,25 +518,6 @@ fn label(name: &str) -> String {
     format!("{DIM}{name}{RESET}")
 }
 
-fn git_ahead_behind() -> Option<(usize, usize)> {
-    let output = Command::new("git")
-        .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.trim().split('\t').collect();
-    if parts.len() == 2 {
-        let ahead = parts[0].parse().unwrap_or(0);
-        let behind = parts[1].parse().unwrap_or(0);
-        Some((ahead, behind))
-    } else {
-        None
-    }
-}
-
 fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Option<String> {
     let pct = bucket.used_percentage;
     let has_reset = bucket.resets_at != 0;
@@ -493,7 +531,7 @@ fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Op
     Some(out)
 }
 
-fn render_widget(name: &str, data: &SessionData) -> Option<String> {
+fn render_widget(name: &str, data: &SessionData, git: &GitContext) -> Option<String> {
     match name {
         "model" => {
             if data.model.display_name.is_empty() {
@@ -516,6 +554,15 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
         "cost" => {
             let cost = data.cost.total_cost_usd;
             Some(format!("{} ${cost:.2}", label("cost")))
+        }
+        "cost-rate" => {
+            let ms = data.cost.total_duration_ms;
+            if ms == 0 {
+                return None;
+            }
+            let hours = ms as f64 / 3_600_000.0;
+            let rate = data.cost.total_cost_usd / hours;
+            Some(format!("{} ${rate:.2}/h", label("rate")))
         }
         "lines" => {
             let added = data.cost.total_lines_added;
@@ -540,9 +587,9 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
                 format_tokens(output)
             ))
         }
-        "git-branch" => git_branch().map(|b| format!("{CYAN}{b}{RESET}")),
+        "git-branch" => git.branch().map(|b| format!("{CYAN}{b}{RESET}")),
         "git-ahead" => {
-            let (ahead, behind) = git_ahead_behind()?;
+            let (ahead, behind) = git.ahead_behind()?;
             if ahead == 0 && behind == 0 {
                 None
             } else {
@@ -557,7 +604,7 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             }
         }
         "git-files" => {
-            let counts = git_file_counts()?;
+            let counts = git.file_counts()?;
             let mut parts = Vec::new();
             if counts.staged > 0 {
                 parts.push(format!("{GREEN}{}staged{RESET}", counts.staged));
@@ -578,15 +625,16 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
             }
         }
         "git-lines" => {
-            let (added, deleted) = git_diff_lines()?;
+            let (added, deleted) = git.diff_lines()?;
             if added == 0 && deleted == 0 {
                 None
             } else {
                 Some(format!("{GREEN}+{added}{RESET}/{RED}-{deleted}{RESET}"))
             }
         }
+        "last-commit" => git.last_commit().map(|s| format!("{} {s}", label("last"))),
         "git-status" => {
-            let (staged, modified) = git_status_counts()?;
+            let (staged, modified) = git.status_counts()?;
             if staged == 0 && modified == 0 {
                 None
             } else {
@@ -684,6 +732,18 @@ mod tests {
     fn format_duration_days() {
         assert_eq!(format_duration_ms(24 * 3_600_000), "1d 0h");
         assert_eq!(format_duration_ms(3096 * 60_000 + 2_000), "2d 3h");
+    }
+
+    #[test]
+    fn format_age_compact_floors_to_minutes() {
+        assert_eq!(format_age_compact(0), "0m");
+        assert_eq!(format_age_compact(45), "0m");
+        assert_eq!(format_age_compact(60), "1m");
+        assert_eq!(format_age_compact(12 * 60 + 59), "12m");
+        assert_eq!(format_age_compact(60 * 60), "1h 0m");
+        assert_eq!(format_age_compact(2 * 3600 + 15 * 60), "2h 15m");
+        assert_eq!(format_age_compact(24 * 3600), "1d 0h");
+        assert_eq!(format_age_compact(3 * 86400 + 4 * 3600 + 30 * 60), "3d 4h");
     }
 
     #[test]

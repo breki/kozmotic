@@ -452,6 +452,42 @@ fn test_status_line_git_files() {
 }
 
 #[test]
+fn test_status_line_cost_rate() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    // cost=$1.23, duration=754s ≈ 0.2094h, rate ≈ $5.87/h
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("cost-rate")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("$5.87/h"));
+}
+
+#[test]
+fn test_status_line_cost_rate_zero_duration() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("cost-rate")
+        .write_stdin(r#"{"cost":{"total_cost_usd":1.0,"total_duration_ms":0}}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_status_line_last_commit() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("last-commit")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_status_line_git_lines() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line")

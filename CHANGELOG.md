@@ -17,6 +17,21 @@ and this project adheres to
   (staged + unstaged combined), e.g. `+42/-7`. Hidden
   when the working tree is clean. Binary files are
   skipped.
+- `last-commit` status-line widget shows the relative
+  age of `HEAD` with minute granularity, e.g.
+  `last 12m`, `last 2h 15m`, or `last 3d 4h`.
+- `cost-rate` status-line widget shows session burn
+  rate in dollars per wall-clock hour, e.g.
+  `rate $4.20/h`.
+
+### Changed
+
+- `git-*` status-line widgets now share a per-render
+  cache, so each underlying `git` command runs at
+  most once even when several git widgets are
+  configured (previously `git-lines` and `git-status`
+  each spawned the same two `git diff --numstat`
+  processes independently).
 - `status-line` now surfaces a red diagnostic on
   stdout (in addition to stderr) when stdin is empty
   or the session JSON is malformed, so failures are
