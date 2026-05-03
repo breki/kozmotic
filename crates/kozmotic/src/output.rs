@@ -13,7 +13,7 @@ impl std::str::FromStr for OutputFormat {
         match s.to_lowercase().as_str() {
             "json" => Ok(OutputFormat::Json),
             "human" => Ok(OutputFormat::Human),
-            _ => Err(format!("Invalid format: {}. Use 'json' or 'human'", s)),
+            _ => Err(format!("Invalid format: {s}. Use 'json' or 'human'")),
         }
     }
 }

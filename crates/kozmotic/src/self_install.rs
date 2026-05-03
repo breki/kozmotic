@@ -58,14 +58,11 @@ pub fn handle_self_install(format: &OutputFormat, target_dir: Option<PathBuf>) -
         }
     };
 
-    let target_dir = match target_dir {
-        Some(d) => d,
-        None => {
-            let Some(home) = home_dir() else {
-                return emit_error(format, &SelfInstallError::HomeNotFound);
-            };
-            home.join(".claude").join("bin")
-        }
+    let target_dir = if let Some(d) = target_dir { d } else {
+        let Some(home) = home_dir() else {
+            return emit_error(format, &SelfInstallError::HomeNotFound);
+        };
+        home.join(".claude").join("bin")
     };
 
     if let Err(e) = std::fs::create_dir_all(&target_dir) {

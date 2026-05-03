@@ -118,13 +118,13 @@ fn main() -> ExitCode {
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
                 }
                 OutputFormat::Human => {
-                    println!("Hello, {}!", name);
+                    println!("Hello, {name}!");
                 }
             }
             ExitCode::SUCCESS
         }
         Some(Commands::StatusLine { show, separator }) => {
-            handle_status_line(StatusLineArgs { show, separator })
+            handle_status_line(&StatusLineArgs { show, separator })
         }
         Some(Commands::Self_(SelfCommands::Install(args))) => {
             handle_self_install(&cli.format, args.target_dir)

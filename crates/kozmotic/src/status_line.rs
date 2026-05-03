@@ -83,7 +83,6 @@ where
 {
     use serde_json::Value;
     match Option::<Value>::deserialize(deserializer)? {
-        None | Some(Value::Null) => Ok(0),
         Some(Value::Number(n)) => Ok(n.as_i64().unwrap_or(0)),
         Some(Value::String(s)) => Ok(parse_rfc3339(&s).unwrap_or(0)),
         _ => Ok(0),
@@ -131,7 +130,7 @@ pub struct StatusLineArgs {
     pub separator: String,
 }
 
-pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
+pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() || input.trim().is_empty() {
         report_error("no input on stdin");
@@ -150,7 +149,7 @@ pub fn handle_status_line(args: StatusLineArgs) -> ExitCode {
     // Support multi-line: split on ";" to get lines
     let lines: Vec<&str> = args.show.split(';').collect();
     for line_spec in &lines {
-        let widgets: Vec<&str> = line_spec.split(',').map(|s| s.trim()).collect();
+        let widgets: Vec<&str> = line_spec.split(',').map(str::trim).collect();
         let parts: Vec<String> = widgets
             .iter()
             .filter_map(|w| render_widget(w, &data, &git))
@@ -272,11 +271,11 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;
     let yoe = y - era * 400;
-    let m = m as i64;
-    let d = d as i64;
+    let m = i64::from(m);
+    let d = i64::from(d);
     let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
+    era * 146_097 + doe - 719_468
 }
 
 /// Format a Unix timestamp (seconds) as a local datetime using the
@@ -425,7 +424,7 @@ impl GitContext {
         })
     }
 
-    /// (staged_files_changed, unstaged_files_changed) — counted from
+    /// (`staged_files_changed`, `unstaged_files_changed`) — counted from
     /// numstat row counts, not porcelain, to match historical behavior.
     fn status_counts(&self) -> Option<(usize, usize)> {
         let staged = self.numstat_staged()?;
@@ -526,7 +525,8 @@ fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Op
     }
     let mut out = format!("{} {pct:.0}%", label(lbl));
     if let Some(when) = format_reset(bucket.resets_at, reset_fmt) {
-        out.push_str(&format!(" (→{when})"));
+        use std::fmt::Write as _;
+        let _ = write!(out, " (→{when})");
     }
     Some(out)
 }
