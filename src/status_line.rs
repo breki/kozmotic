@@ -373,6 +373,33 @@ fn git_file_counts() -> Option<GitFileCounts> {
     })
 }
 
+/// Sum added/deleted line counts across both staged and unstaged
+/// changes. Binary files (numstat rows starting with `-`) are skipped.
+fn git_diff_lines() -> Option<(usize, usize)> {
+    let mut added = 0usize;
+    let mut deleted = 0usize;
+    for args in [
+        ["diff", "--numstat"].as_slice(),
+        ["diff", "--cached", "--numstat"].as_slice(),
+    ] {
+        let output = Command::new("git").args(args).output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let mut cols = line.split('\t');
+            let a = cols.next().unwrap_or("");
+            let d = cols.next().unwrap_or("");
+            if a == "-" || d == "-" {
+                continue;
+            }
+            added += a.parse::<usize>().unwrap_or(0);
+            deleted += d.parse::<usize>().unwrap_or(0);
+        }
+    }
+    Some((added, deleted))
+}
+
 const STATUS_CACHE_FILE: &str = "kozmotic-api-status.json";
 const STATUS_CACHE_TTL_SECS: u64 = 120; // 2 minutes
 const STATUS_URL: &str = "https://status.claude.com/api/v2/summary.json";
@@ -548,6 +575,14 @@ fn render_widget(name: &str, data: &SessionData) -> Option<String> {
                 Some(format!("{} (clean)", label("git")))
             } else {
                 Some(format!("{} {}", label("git"), parts.join(" ")))
+            }
+        }
+        "git-lines" => {
+            let (added, deleted) = git_diff_lines()?;
+            if added == 0 && deleted == 0 {
+                None
+            } else {
+                Some(format!("{GREEN}+{added}{RESET}/{RED}-{deleted}{RESET}"))
             }
         }
         "git-status" => {

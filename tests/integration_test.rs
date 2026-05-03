@@ -452,6 +452,17 @@ fn test_status_line_git_files() {
 }
 
 #[test]
+fn test_status_line_git_lines() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("git-lines")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_status_line_multiline() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line")

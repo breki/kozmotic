@@ -12,6 +12,11 @@ and this project adheres to
 
 ### Added
 
+- `git-lines` status-line widget shows added/deleted
+  line counts for the current uncommitted changeset
+  (staged + unstaged combined), e.g. `+42/-7`. Hidden
+  when the working tree is clean. Binary files are
+  skipped.
 - `status-line` now surfaces a red diagnostic on
   stdout (in addition to stderr) when stdin is empty
   or the session JSON is malformed, so failures are

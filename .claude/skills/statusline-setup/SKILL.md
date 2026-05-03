@@ -37,6 +37,9 @@ status-line` for the Claude Code status bar.
      (e.g. $1.23)"
    - `lines` — "Lines of code added/removed
      (e.g. +150/-30)"
+   - `git-lines` — "Added/deleted line counts in
+     the current uncommitted changeset
+     (e.g. +42/-7)"
    - `rate-limit` — "5-hour API rate limit
      usage % (Pro/Max only)"
    - `vim` — "Vim mode indicator
