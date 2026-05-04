@@ -1,12 +1,32 @@
 # Normalize all text files to LF in the repository.
-# Checkout as native line endings on each platform.
 * text=auto eol=lf
 
-# Ensure these are always treated as binary.
-*.ogg binary
-*.wav binary
-*.mp3 binary
-*.flac binary
+# Source code
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
 *.png binary
 *.jpg binary
+*.jpeg binary
+*.gif binary
 *.ico binary
+*.pdf binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.flac binary

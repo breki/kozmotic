@@ -1,0 +1,62 @@
+# kozmotic
+
+> Portable CLI toolkit for AI agents. Subcommands emit
+> structured JSON so they compose inside Claude Code
+> hooks, status lines, and slash commands.
+
+## Project Identity
+
+- Language: Rust (edition 2024, stable)
+- Workspace: `crates/kozmotic` (CLI), `xtask` (dev tasks)
+- Target platforms: Windows, Linux, macOS
+
+## Subcommands
+
+| Command | Purpose |
+|---------|---------|
+| `kozmotic example` | Reference for new tools |
+| `kozmotic agent-ping` | Play notification sounds |
+| `kozmotic status-line` | Format session JSON for the status bar |
+| `kozmotic self install` | Install into `~/.claude/bin/` |
+
+Global flag: `--format json|human` (default `json`).
+
+## Build Commands
+
+```
+cargo xtask validate          # fmt + clippy + tests + coverage
+cargo xtask test [filter]     # tests only
+cargo xtask clippy            # lint only
+cargo xtask fmt               # format code
+cargo xtask check             # fast compile check
+cargo xtask coverage          # coverage check (>=90%)
+cargo xtask dupes             # code duplication check (<=6%)
+```
+
+PowerShell entry: `.\build.ps1 <command>` (validate,
+test, clippy, fmt, check, coverage, build, clean).
+
+## Quality Gates
+
+- `#[deny(warnings)]`, `#[forbid(unsafe_code)]`
+- Clippy pedantic with a curated allow-list
+- 90% line coverage minimum (85% per module)
+- Code duplication <= 6% (production code, tests
+  excluded)
+- `cargo fmt` enforced (max width 80)
+
+## Conventions
+
+- Conventional Commits with `AI-Generated:` footer
+- Semantic Versioning (source of truth:
+  `crates/kozmotic/Cargo.toml`)
+- Keep a Changelog format in `CHANGELOG.md`
+- LF line endings, 80-char line width
+
+## Template Origin
+
+Generated from the
+[rustbase](https://github.com/breki/rustbase) template.
+Sync state lives in `.template-sync.toml`. Template
+feedback is logged in
+`docs/developer/template-feedback.md`.

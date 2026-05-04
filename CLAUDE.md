@@ -3,176 +3,196 @@
 This file provides guidance to Claude Code (claude.ai/code)
 when working with code in this repository.
 
-## Project Goals
+**IMPORTANT: The working directory is already set to the
+project root. NEVER use `cd` to the project root or
+`git -C <dir>` -- blanket permission rules cannot be
+set for commands starting with `cd` or `git -C`, so
+they require manual approval every time.**
 
-- Implement AI agent-friendly, fast and portable CLI tools
-  written in Rust
-- Dogfood these tools in the project itself
+## Project Overview
+
+Kozmotic is a portable CLI toolkit for AI agents,
+written in Rust. Tools emit structured JSON (or human
+output via `--format human`) so they compose cleanly
+inside Claude Code hooks, status lines, and slash
+commands.
+
+- **Stack**: Rust (edition 2024, stable)
+- **Target platforms**: Windows, Linux, macOS
+- **Output**: structured JSON envelope via `Output<T>`
+
+### Subcommands
+
+| Command | Purpose |
+|---------|---------|
+| `kozmotic example` | Reference subcommand for new tools |
+| `kozmotic agent-ping` | Play notification sounds (presets, files, tones) |
+| `kozmotic status-line` | Format Claude Code session JSON for the status bar |
+| `kozmotic self install` | Install the binary into `~/.claude/bin/` |
+
+### Workspace Crates
+
+| Crate | Purpose |
+|-------|---------|
+| `crates/kozmotic` | CLI binary (the toolkit) |
+| `xtask` | Build automation |
+
+## Build Commands
+
+```bash
+cargo xtask check             # fast compile check
+cargo xtask validate          # fmt + clippy + tests + coverage
+cargo xtask test [filter]     # tests only
+cargo xtask clippy            # lint only
+cargo xtask coverage          # coverage only (>=90%)
+cargo xtask fmt               # format code
+cargo xtask dupes             # code duplication check
+```
+
+Never use raw `cargo test` or `cargo clippy` -- always
+go through `xtask`.
+
+### PowerShell Build Script
+
+```powershell
+.\build.ps1 validate    # cargo xtask validate
+.\build.ps1 test        # tests only
+.\build.ps1 build       # validate + release build
+.\build.ps1 clean       # clean artifacts
+```
+
+## Coding Standards
+
+- Rust edition 2024
+- `#[deny(warnings)]` and `#[forbid(unsafe_code)]` via
+  workspace lints
+- Clippy pedantic where practical (allow-list in
+  workspace `Cargo.toml`)
+- Error handling: `thiserror` for typed errors;
+  `anyhow` is fine in main if/when added
+- Wrap markdown at 80 characters per line
+- Maximum code line width: 80 characters (`rustfmt.toml`)
 
 ## Development Practices
 
-- **Domain-Driven Design (DDD)**: Design driven by domain
-  concepts
-- **Test-Driven Development (TDD)**: Write tests before
-  implementation
-- **Conventional Commits**: Clear commit messages for clean
-  history
-- **Ask before assuming**: When in doubt or when multiple
-  approaches exist, use the `AskUserQuestion` tool to
-  clarify rather than guessing
-- **80-column markdown**: Wrap all `.md` files at 80 columns
+- **Domain-Driven Design (DDD)**: model around domain
+  concepts, not framework primitives.
+- **Test-Driven Development (TDD)**: write a failing
+  test first; make it pass with the smallest code; then
+  refactor. Run `cargo xtask test` after each step.
+- **Ask before assuming**: when multiple approaches
+  exist, use the `AskUserQuestion` tool to clarify
+  rather than guessing.
 
-## Build & Development Commands
+## Adding a new tool
 
-Use the wrapper scripts in `scripts/` instead of
-calling cargo directly. This makes permission
-control easier via `settings.local.json`.
+1. Add a variant to `Commands` in
+   `crates/kozmotic/src/main.rs`.
+2. Implement the handler in its own module under
+   `crates/kozmotic/src/`.
+3. Wrap the result with `Output::success(tool, data)`.
+4. Respect the `--format` flag for JSON vs human
+   output.
+5. Cover the new path in
+   `crates/kozmotic/tests/integration_test.rs` using
+   `assert_cmd`.
 
-- `bash scripts/validate.sh` — run all checks
-  (fmt + clippy + test) in one step
-- `bash scripts/build.sh` — build the project
-- `bash scripts/run.sh <args>` — run locally
-  (e.g., `bash scripts/run.sh agent-ping --sound Stop`)
-- `bash scripts/test.sh` — run all tests
-- `bash scripts/test.sh <test_name>` — run a single
-  test
-- `bash scripts/fmt.sh` — auto-format code
-- `bash scripts/clippy.sh` — lint (warnings as errors)
-- `bash scripts/self-install.sh` — install binary to
-  `~/.claude/bin/`
+## Commits
 
-## Architecture
+**All commits must go through the `/commit` skill.**
+Never use `git commit` directly. No `Co-Authored-By`,
+no emoji.
 
-Kozmotic is an early-stage Rust CLI providing
-agent-friendly tools with structured JSON output. The
-project is a Cargo workspace with two crates:
+Conventional Commits format with an AI-generated footer:
 
-- **`kozmotic`** (root) — the main CLI binary
-- **`xtask`** — dev automation tasks
-  (`cargo xtask validate`, etc.)
+```
+type(scope): subject
 
-### CLI structure
+Body explaining what and why (wrapped at 72).
 
-Uses a subcommand pattern via `clap` derive.
+AI-Generated: Claude Code (<ModelName> <Date>)
+```
 
-- `Cli` — top-level parser with a global `--format`
-  flag (`json` | `human`)
-- `Commands` — enum of subcommands (`Example`,
-  `AgentPing`, `StatusLine`, `Self_`)
-- `Output<T>` (`src/output.rs`) — generic JSON
-  response wrapper with `status`, `data`, and
-  `metadata` fields. Use
-  `Output::success(tool_name, data)` to construct
-  responses.
-
-### Modules
-
-- `src/main.rs` — CLI definition and dispatch
-- `src/output.rs` — `Output<T>`, `OutputFormat`
-- `src/agent_ping.rs` — sound notification tool
-- `src/self_install.rs` — binary installer
-- `src/status_line.rs` — status bar formatter
-
-### Adding a new tool
-
-Add a variant to `Commands`, handle it in the
-`main()` match, and wrap output with
-`Output::success()`. Respect the `--format` flag for
-JSON vs human-readable output.
-
-### Integration tests
-
-`tests/integration_test.rs` uses `assert_cmd` to
-invoke the binary and `predicates` to validate
-stdout. Tests run against the compiled binary, not
-library code.
-
-## CI
-
-GitHub Actions runs on all three platforms (ubuntu, windows,
-macos). CI enforces:
-- `cargo test`
-- `cargo fmt --check`
-- `cargo clippy --all-targets -- -D warnings`
-
-Rust edition is 2024. Requires stable toolchain.
+- Header: 50 chars max, imperative mood, no trailing
+  period.
+- Body: 72-char wrap, focuses on what/why.
+- Footer: `AI-Generated: Claude Code (<ModelName>
+  <Date>)`. No `Co-Authored-By`. No
+  `Generated with Claude Code` lines.
 
 ## Acceptance Criteria
 
-Before completing any task, run
-`bash scripts/validate.sh`, which checks:
+Before completing any task, run `cargo xtask validate`,
+which checks:
 
 1. **Formatting**: `cargo fmt --all -- --check`
 2. **No warnings**:
    `cargo clippy --all-targets -- -D warnings`
 3. **All tests pass**: `cargo test`
-4. **Coverage >= 95%**
-
-## Planning
-
-`TODO.md` tracks ideas and upcoming tasks. Check it
-before starting new work and keep it up to date as
-items are completed or added.
+4. **Coverage >= 90%** (per-module floor 85%)
 
 ## Semantic Versioning
 
 Follow [Semantic Versioning 2.0.0](https://semver.org/):
 
-- **MAJOR** — breaking changes to CLI interface or JSON
-  output schema
-- **MINOR** — new subcommands, flags, or backwards-compatible
-  features
-- **PATCH** — bug fixes, documentation, internal refactors
+- **MAJOR** -- breaking changes to CLI interface or
+  JSON output schema
+- **MINOR** -- new subcommands, flags, or backwards-
+  compatible features
+- **PATCH** -- bug fixes, documentation, internal
+  refactors
 
-The app version lives in `Cargo.toml` and is the **single
-source of truth**.
-
-When bumping the version:
-1. Update `version` in `Cargo.toml`
-2. Add a new section to `CHANGELOG.md`
-3. Commit both changes together
+The version lives in `crates/kozmotic/Cargo.toml` and
+is the **single source of truth**.
 
 ## Release Notes
 
 Maintain `CHANGELOG.md` using the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-format. Group changes under these headings:
+format. Group changes under: **Added**, **Changed**,
+**Fixed**, **Removed**.
 
-- **Added** — new features
-- **Changed** — changes to existing functionality
-- **Fixed** — bug fixes
-- **Removed** — removed features
+Always keep an `[Unreleased]` section at the top.
 
-Always keep an `[Unreleased]` section at the top for
-in-progress work. When releasing, rename `[Unreleased]`
-to `[X.Y.Z] - YYYY-MM-DD` and add a fresh
-`[Unreleased]` above it.
+## Planning
 
-## Commit Messages
+`TODO.md` tracks upcoming tasks. Check it before
+starting new work and keep it up to date as items are
+completed or added.
 
-Use Conventional Commits format with an AI-generated footer.
+## Skills
 
-```
-type(scope): subject
+| Skill | Purpose |
+|-------|---------|
+| `/check` | Fast compilation check (no tests) |
+| `/test` | Run tests with agent-friendly output |
+| `/validate` | Full quality pipeline with stepwise progress |
+| `/commit` | Commit with versioning, diary, and conventions |
+| `/release` | Prepare a versioned release |
+| `/todo` | Add a TODO item or implement the next pending one |
+| `/simplify` | Review changed code for quality |
+| `/architect` | Project overview and architecture guide |
+| `/agent-cli` | Patterns for agent-friendly CLI subcommands |
+| `/sound` | Toggle hook sounds on/off |
+| `/statusline-setup` | Configure status line widgets |
+| `/template-improve` | Log feedback for the rustbase template |
+| `/template-sync` | Sync upstream template changes |
 
-Body text here.
+## Template Sync
 
-AI-Generated: <AgentName> (<ModelName> <Date>)
-```
+This project tracks its template origin in
+`.template-sync.toml`. Use `/template-sync` to pull
+improvements from the upstream
+[rustbase](https://github.com/breki/rustbase) template.
+The command fetches upstream changes, categorizes
+them, and helps you selectively apply relevant updates
+while preserving your project's customizations.
 
-**Header** — `type(scope): description`
-- 50 characters max (including type and scope)
-- Imperative mood ("add" not "added")
-- No period at the end
+## Template Feedback
 
-**Body**
-- Wrap at 72 characters
-- Explain *what* and *why*, not *how*
-
-**Footer**
-- `AI-Generated: Claude Code (<ModelName> <Date>)`
-- Omit `Refs:` line if there is no Jira ticket
-
-**Do NOT include:**
-- `Co-Authored-By` lines
-- `Generated with Claude Code` lines
+This project was generated from the
+[rustbase](https://github.com/breki/rustbase) template.
+When you notice anything in the template-provided
+files that is suboptimal, incorrect, outdated, or
+could be improved, log it in
+`docs/developer/template-feedback.md`.
