@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Stop hook: runs cargo clippy and cargo test when Rust
-# files have been modified.
+# Stop hook: runs cargo xtask validate when Rust files
+# have been modified.
 #
 # Exit codes:
-#   0 — all checks passed (or nothing to check)
-#   2 — a check failed; stderr carries the failure output
+#   0 -- all checks passed (or nothing to check)
+#   2 -- a check failed; stderr carries the failure output
 #       so Claude can fix the issues before stopping
 
 set -euo pipefail
@@ -31,26 +31,7 @@ if [ -z "$changed_rs" ]; then
 fi
 
 # --- Run checks ------------------------------------------
-failed=0
-output=""
-
-clippy_out=$(cargo clippy --all-targets -- -D warnings 2>&1) || {
-  failed=1
-  output+="=== cargo clippy FAILED ===
-${clippy_out}
-
-"
-}
-
-test_out=$(cargo test 2>&1) || {
-  failed=1
-  output+="=== cargo test FAILED ===
-${test_out}
-
-"
-}
-
-if [ "$failed" -ne 0 ]; then
+output=$(cargo xtask validate 2>&1) || {
   echo "$output" >&2
   exit 2
-fi
+}
