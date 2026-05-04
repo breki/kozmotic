@@ -23,6 +23,7 @@ Thumbs.db
 # Coverage
 coverage.xml
 coverage.json
+coverage.lcov
 *.profraw
 *.profdata
 

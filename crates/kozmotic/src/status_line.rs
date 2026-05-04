@@ -1,11 +1,12 @@
 use std::cell::OnceCell;
 use std::io::Read;
-use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::SystemTime;
 
 use chrono::{DateTime, Local};
 use serde::Deserialize;
+
+mod api_status;
 
 #[derive(Deserialize, Default)]
 struct SessionData {
@@ -467,56 +468,6 @@ impl GitContext {
     }
 }
 
-const STATUS_CACHE_FILE: &str = "kozmotic-api-status.json";
-const STATUS_CACHE_TTL_SECS: u64 = 120; // 2 minutes
-const STATUS_URL: &str = "https://status.claude.com/api/v2/summary.json";
-
-#[derive(Deserialize)]
-struct StatusPageResponse {
-    status: StatusPageStatus,
-}
-
-#[derive(Deserialize)]
-struct StatusPageStatus {
-    indicator: String,
-}
-
-fn status_cache_path() -> PathBuf {
-    std::env::temp_dir().join(STATUS_CACHE_FILE)
-}
-
-fn read_cached_status() -> Option<String> {
-    let path = status_cache_path();
-    let metadata = std::fs::metadata(&path).ok()?;
-    let age = SystemTime::now()
-        .duration_since(metadata.modified().ok()?)
-        .ok()?;
-    if age.as_secs() > STATUS_CACHE_TTL_SECS {
-        return None;
-    }
-    std::fs::read_to_string(&path).ok()
-}
-
-fn fetch_and_cache_status() -> Option<String> {
-    let body: String = ureq::get(STATUS_URL)
-        .call()
-        .ok()?
-        .into_body()
-        .read_to_string()
-        .ok()?;
-    let parsed: StatusPageResponse = serde_json::from_str(&body).ok()?;
-    let indicator = parsed.status.indicator;
-    let _ = std::fs::write(status_cache_path(), &indicator);
-    Some(indicator)
-}
-
-fn get_api_status() -> Option<String> {
-    if let Some(cached) = read_cached_status() {
-        return Some(cached);
-    }
-    fetch_and_cache_status()
-}
-
 const DIM: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 const CYAN: &str = "\x1b[36m";
@@ -716,7 +667,7 @@ fn render_widget(
             }
         }
         "api-status" => {
-            let indicator = get_api_status()?;
+            let indicator = api_status::get_api_status()?;
             let (symbol, color) = match indicator.as_str() {
                 "none" => ("ok", GREEN),
                 "minor" => ("degraded", YELLOW),

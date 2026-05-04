@@ -499,6 +499,157 @@ fn test_status_line_git_lines() {
 }
 
 #[test]
+fn test_status_line_lines() {
+    // The "lines" widget renders +added/-removed from cost data.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("lines")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+150"))
+        .stdout(predicate::str::contains("-30"));
+}
+
+#[test]
+fn test_status_line_context_yellow() {
+    // 50-80% used should colour the context widget yellow.
+    let json = r#"{
+        "model": {},
+        "context_window": { "used_percentage": 65.0 },
+        "cost": {}
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("context")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\x1b[33m")); // yellow
+}
+
+#[test]
+fn test_status_line_rate_limit_7d() {
+    let json = r#"{
+        "model": {},
+        "context_window": {},
+        "cost": {},
+        "rate_limits": {
+            "seven_day": { "used_percentage": 12.0 }
+        }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("rate-limit-7d")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("12%"));
+}
+
+#[test]
+fn test_status_line_rate_limit_with_reset() {
+    // resets_at as Unix timestamp triggers the format_reset
+    // path that appends "(→HH:MM)".
+    let json = r#"{
+        "rate_limits": {
+            "five_hour": {
+                "used_percentage": 73.2,
+                "resets_at": 1735689600
+            }
+        }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("rate-limit")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("73%"))
+        .stdout(predicate::str::contains("→"));
+}
+
+#[test]
+fn test_status_line_rate_limit_rfc3339_reset() {
+    // Resets_at as RFC3339 string -- exercises parse_rfc3339.
+    let json = r#"{
+        "rate_limits": {
+            "five_hour": {
+                "used_percentage": 50.0,
+                "resets_at": "2026-04-20T15:04:05Z"
+            }
+        }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("rate-limit")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("50%"));
+}
+
+#[test]
+fn test_status_line_invalid_json() {
+    // Bad JSON should print a diagnostic, not crash.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .write_stdin("{not valid json")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("status-line"));
+}
+
+#[test]
+fn test_status_line_unknown_widget() {
+    // Unknown widget names render to nothing.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("nonsense-widget")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_status_line_duration_hours() {
+    // Past the 1-hour mark, duration switches to "Xh Ym".
+    let json = r#"{
+        "cost": { "total_duration_ms": 4500000 }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("duration")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1h 15m"));
+}
+
+#[test]
+fn test_status_line_duration_days() {
+    // Past 24 hours, duration switches to "Xd Yh".
+    let json = r#"{
+        "cost": { "total_duration_ms": 180000000 }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("duration")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2d"));
+}
+
+#[test]
 fn test_status_line_multiline() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line")
@@ -515,6 +666,135 @@ fn test_status_line_multiline() {
 fn test_status_line_empty_stdin() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line").write_stdin("").assert().failure();
+}
+
+// --- agent-ping muted ---
+
+fn fake_home_with_mute(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir()
+        .join("kozmotic-test-home")
+        .join(format!("{}-{}", std::process::id(), name));
+    let claude = dir.join(".claude");
+    std::fs::create_dir_all(&claude).unwrap();
+    std::fs::write(claude.join(".mute-sounds"), "").unwrap();
+    dir
+}
+
+#[test]
+fn test_agent_ping_muted_json() {
+    let home = fake_home_with_mute("ping-mute-json");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .arg("agent-ping")
+        .arg("--sound")
+        .arg("Stop")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"muted\": true"))
+        .stdout(predicate::str::contains("\"played\": false"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_agent_ping_muted_human() {
+    let home = fake_home_with_mute("ping-mute-human");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .arg("--format")
+        .arg("human")
+        .arg("agent-ping")
+        .arg("--sound")
+        .arg("Stop")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("muted"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_agent_ping_muted_with_file() {
+    // Muted path includes "unknown" fallback when no source given
+    // and uses --file source for the muted JSON output.
+    let home = fake_home_with_mute("ping-mute-file");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .arg("agent-ping")
+        .arg("--file")
+        .arg("nonexistent.wav")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"muted\": true"))
+        .stdout(predicate::str::contains("nonexistent.wav"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_agent_ping_play_success_sound() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("KOZMOTIC_TEST_AUDIO", "ok")
+        .arg("agent-ping")
+        .arg("--sound")
+        .arg("Stop")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"played\": true"));
+}
+
+#[test]
+fn test_agent_ping_play_success_frequency() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("KOZMOTIC_TEST_AUDIO", "ok")
+        .arg("agent-ping")
+        .arg("--frequency")
+        .arg("440")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"played\": true"))
+        .stdout(predicate::str::contains("\"frequency\""));
+}
+
+#[test]
+fn test_agent_ping_play_success_human() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("KOZMOTIC_TEST_AUDIO", "ok")
+        .arg("--format")
+        .arg("human")
+        .arg("agent-ping")
+        .arg("--sound")
+        .arg("Stop")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Played: Stop"));
+}
+
+#[test]
+fn test_agent_ping_play_success_file() {
+    // Use an existing file (the binary itself) as a stand-in;
+    // playback is overridden so the file is never decoded.
+    let exe = std::env::current_exe().unwrap();
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("KOZMOTIC_TEST_AUDIO", "ok")
+        .arg("agent-ping")
+        .arg("--file")
+        .arg(exe.as_os_str())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"played\": true"));
+}
+
+#[test]
+fn test_agent_ping_play_audio_device_error() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("KOZMOTIC_TEST_AUDIO", "err")
+        .arg("agent-ping")
+        .arg("--sound")
+        .arg("Stop")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("AUDIO_DEVICE_ERROR"));
 }
 
 // --- self install tests ---
@@ -559,6 +839,75 @@ fn test_self_install_human() {
         .success()
         .stdout(predicate::str::contains("Installed to"))
         .stdout(predicate::str::contains("agent-ping"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_self_install_home_not_found() {
+    // With both HOME and USERPROFILE unset and no --target-dir,
+    // home_dir() returns None and the error path fires.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env_remove("HOME")
+        .env_remove("USERPROFILE")
+        .arg("self")
+        .arg("install")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("HOME_NOT_FOUND"));
+}
+
+#[test]
+fn test_self_install_home_not_found_human() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env_remove("HOME")
+        .env_remove("USERPROFILE")
+        .arg("--format")
+        .arg("human")
+        .arg("self")
+        .arg("install")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("HOME_NOT_FOUND"));
+}
+
+#[test]
+fn test_self_install_create_dir_fails() {
+    // Point --target-dir at a path that exists as a *file*, so
+    // create_dir_all fails.
+    let blocker = std::env::temp_dir()
+        .join(format!("kozmotic-blocker-{}", std::process::id()));
+    std::fs::write(&blocker, "x").unwrap();
+    let target = blocker.join("nested");
+
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("self")
+        .arg("install")
+        .arg("--target-dir")
+        .arg(target.as_os_str())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("CREATE_DIR"));
+    let _ = std::fs::remove_file(&blocker);
+}
+
+#[test]
+fn test_self_install_no_home_tilde_path() {
+    // When HOME is unset but --target-dir is given, install
+    // succeeds but the tilde-substituted path falls back to
+    // the literal install path.
+    let dir = temp_install_dir("no-home");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env_remove("HOME")
+        .env_remove("USERPROFILE")
+        .arg("--format")
+        .arg("human")
+        .arg("self")
+        .arg("install")
+        .arg("--target-dir")
+        .arg(dir.as_os_str())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Installed to"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

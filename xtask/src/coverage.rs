@@ -9,7 +9,17 @@ pub const THRESHOLD: f64 = 90.0;
 const MODULE_THRESHOLD: f64 = 85.0;
 
 /// Regex passed to `llvm-cov --ignore-filename-regex`.
-const IGNORE_REGEX: &str = r"src[/\\]main\.rs$";
+/// Excludes:
+/// - `src/main.rs` -- thin clap dispatch wrapper
+/// - `agent_ping/playback.rs` -- hardware-bound audio
+///   playback that requires a real output device
+/// - `status_line/api_status.rs` -- network-bound status
+///   fetching from status.claude.com
+const IGNORE_REGEX: &str = concat!(
+    r"src[/\\]main\.rs$",
+    r"|agent_ping[/\\]playback\.rs$",
+    r"|status_line[/\\]api_status\.rs$",
+);
 
 pub struct CoverageResult {
     pub line_pct: f64,

@@ -2,6 +2,8 @@ use std::process::ExitCode;
 
 use crate::output::{Output, OutputFormat};
 
+mod playback;
+
 const MUTE_FILE: &str = ".mute-sounds";
 
 fn mute_file_path() -> Option<std::path::PathBuf> {
@@ -83,85 +85,6 @@ fn emit_error(format: &OutputFormat, err: &AgentPingError) -> ExitCode {
         }
     }
     ExitCode::from(err.exit_code())
-}
-
-fn play_sound(
-    data: &'static [u8],
-    volume: f32,
-    repeat: u32,
-    interval: u64,
-) -> Result<(), AgentPingError> {
-    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
-    stream.log_on_drop(false);
-    let sink = rodio::Sink::connect_new(stream.mixer());
-    sink.set_volume(volume);
-
-    for i in 0..repeat {
-        let cursor = std::io::Cursor::new(data);
-        let source = rodio::Decoder::new(cursor)
-            .map_err(|e| AgentPingError::UnsupportedFormat(e.to_string()))?;
-        sink.append(source);
-        sink.sleep_until_end();
-        if i + 1 < repeat {
-            std::thread::sleep(std::time::Duration::from_millis(interval));
-        }
-    }
-    Ok(())
-}
-
-fn play_frequency(
-    freq: f32,
-    duration: u64,
-    volume: f32,
-    repeat: u32,
-    interval: u64,
-) -> Result<(), AgentPingError> {
-    use rodio::source::Source;
-
-    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
-    stream.log_on_drop(false);
-    let sink = rodio::Sink::connect_new(stream.mixer());
-    sink.set_volume(volume);
-
-    for i in 0..repeat {
-        let source = rodio::source::SineWave::new(freq)
-            .take_duration(std::time::Duration::from_millis(duration));
-        sink.append(source);
-        sink.sleep_until_end();
-        if i + 1 < repeat {
-            std::thread::sleep(std::time::Duration::from_millis(interval));
-        }
-    }
-    Ok(())
-}
-
-fn play_file(
-    path: &str,
-    volume: f32,
-    repeat: u32,
-    interval: u64,
-) -> Result<(), AgentPingError> {
-    let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
-    stream.log_on_drop(false);
-    let sink = rodio::Sink::connect_new(stream.mixer());
-    sink.set_volume(volume);
-
-    for i in 0..repeat {
-        let file = std::fs::File::open(path)
-            .map_err(|_| AgentPingError::FileNotFound(path.to_string()))?;
-        let reader = std::io::BufReader::new(file);
-        let source = rodio::Decoder::new(reader)
-            .map_err(|e| AgentPingError::UnsupportedFormat(e.to_string()))?;
-        sink.append(source);
-        sink.sleep_until_end();
-        if i + 1 < repeat {
-            std::thread::sleep(std::time::Duration::from_millis(interval));
-        }
-    }
-    Ok(())
 }
 
 pub struct AgentPingArgs {
@@ -281,45 +204,28 @@ pub fn handle_agent_ping(
 
     // --dry-run
     if dry_run {
-        match format {
-            OutputFormat::Json => {
-                let mut details = serde_json::json!({
-                    "volume": volume,
-                    "repeat": repeat,
-                });
-                if let Some(ref name) = sound {
-                    details["sound"] = name.clone().into();
-                }
-                if let Some(freq) = frequency {
-                    details["frequency"] = freq.into();
-                    details["duration_ms"] = duration.into();
-                }
-                if let Some(ref path) = file {
-                    details["file"] = path.clone().into();
-                }
-                let data = serde_json::json!({
-                    "sound": source_label,
-                    "played": false,
-                    "details": details,
-                });
-                let output = Output::success("agent-ping", data);
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
-            }
-            OutputFormat::Human => {
-                println!("[dry-run] Would play: {source_label}");
-            }
-        }
+        emit_played(
+            format,
+            false,
+            &source_label,
+            sound.as_deref(),
+            frequency,
+            duration,
+            file.as_deref(),
+            volume,
+            repeat,
+        );
         return ExitCode::SUCCESS;
     }
 
     // Play sound
     let play_result = if let Some(ref name) = sound {
         let data = get_preset(name).unwrap();
-        play_sound(data, volume, repeat, interval)
+        playback::play_sound(data, volume, repeat, interval)
     } else if let Some(freq) = frequency {
-        play_frequency(freq, duration, volume, repeat, interval)
+        playback::play_frequency(freq, duration, volume, repeat, interval)
     } else if let Some(ref path) = file {
-        play_file(path, volume, repeat, interval)
+        playback::play_file(path, volume, repeat, interval)
     } else {
         unreachable!()
     };
@@ -328,34 +234,62 @@ pub fn handle_agent_ping(
         return emit_error(format, &e);
     }
 
-    // Output success
+    emit_played(
+        format,
+        true,
+        &source_label,
+        sound.as_deref(),
+        frequency,
+        duration,
+        file.as_deref(),
+        volume,
+        repeat,
+    );
+    ExitCode::SUCCESS
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_played(
+    format: &OutputFormat,
+    played: bool,
+    source_label: &str,
+    sound: Option<&str>,
+    frequency: Option<f32>,
+    duration: u64,
+    file: Option<&str>,
+    volume: f32,
+    repeat: u32,
+) {
     match format {
         OutputFormat::Json => {
             let mut details = serde_json::json!({
                 "volume": volume,
                 "repeat": repeat,
             });
-            if let Some(ref name) = sound {
-                details["sound"] = name.clone().into();
+            if let Some(name) = sound {
+                details["sound"] = name.into();
             }
             if let Some(freq) = frequency {
                 details["frequency"] = freq.into();
                 details["duration_ms"] = duration.into();
             }
-            if let Some(ref path) = file {
-                details["file"] = path.clone().into();
+            if let Some(path) = file {
+                details["file"] = path.into();
             }
             let data = serde_json::json!({
                 "sound": source_label,
-                "played": true,
+                "played": played,
                 "details": details,
             });
             let output = Output::success("agent-ping", data);
             println!("{}", serde_json::to_string_pretty(&output).unwrap());
         }
         OutputFormat::Human => {
-            println!("Played: {source_label}");
+            if played {
+                println!("Played: {source_label}");
+            } else {
+                println!("[dry-run] Would play: {source_label}");
+            }
         }
     }
-    ExitCode::SUCCESS
 }
