@@ -29,7 +29,8 @@ impl SelfInstallError {
 fn emit_error(format: &OutputFormat, err: &SelfInstallError) -> ExitCode {
     match format {
         OutputFormat::Json => {
-            let output = Output::error("self-install", err.code(), &err.to_string());
+            let output =
+                Output::error("self-install", err.code(), &err.to_string());
             eprintln!("{}", serde_json::to_string_pretty(&output).unwrap());
         }
         OutputFormat::Human => {
@@ -50,7 +51,10 @@ pub fn home_dir() -> Option<PathBuf> {
     }
 }
 
-pub fn handle_self_install(format: &OutputFormat, target_dir: Option<PathBuf>) -> ExitCode {
+pub fn handle_self_install(
+    format: &OutputFormat,
+    target_dir: Option<PathBuf>,
+) -> ExitCode {
     let exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(e) => {
@@ -58,7 +62,9 @@ pub fn handle_self_install(format: &OutputFormat, target_dir: Option<PathBuf>) -
         }
     };
 
-    let target_dir = if let Some(d) = target_dir { d } else {
+    let target_dir = if let Some(d) = target_dir {
+        d
+    } else {
         let Some(home) = home_dir() else {
             return emit_error(format, &SelfInstallError::HomeNotFound);
         };

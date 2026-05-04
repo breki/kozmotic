@@ -132,7 +132,9 @@ pub struct StatusLineArgs {
 
 pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
     let mut input = String::new();
-    if std::io::stdin().read_to_string(&mut input).is_err() || input.trim().is_empty() {
+    if std::io::stdin().read_to_string(&mut input).is_err()
+        || input.trim().is_empty()
+    {
         report_error("no input on stdin");
         return ExitCode::FAILURE;
     }
@@ -285,7 +287,8 @@ fn format_reset(resets_at: i64, fmt: &str) -> Option<String> {
     if resets_at == 0 {
         return None;
     }
-    let dt: DateTime<Local> = DateTime::from_timestamp(resets_at, 0)?.with_timezone(&Local);
+    let dt: DateTime<Local> =
+        DateTime::from_timestamp(resets_at, 0)?.with_timezone(&Local);
     Some(dt.format(fmt).to_string())
 }
 
@@ -340,10 +343,18 @@ impl GitContext {
 
     fn ahead_behind(&self) -> Option<(usize, usize)> {
         *self.ahead_behind.get_or_init(|| {
-            let stdout = run_git(&["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])?;
+            let stdout = run_git(&[
+                "rev-list",
+                "--left-right",
+                "--count",
+                "HEAD...@{upstream}",
+            ])?;
             let parts: Vec<&str> = stdout.trim().split('\t').collect();
             if parts.len() == 2 {
-                Some((parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0)))
+                Some((
+                    parts[0].parse().unwrap_or(0),
+                    parts[1].parse().unwrap_or(0),
+                ))
             } else {
                 None
             }
@@ -517,7 +528,11 @@ fn label(name: &str) -> String {
     format!("{DIM}{name}{RESET}")
 }
 
-fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Option<String> {
+fn render_rate_limit(
+    lbl: &str,
+    bucket: &RateLimitBucket,
+    reset_fmt: &str,
+) -> Option<String> {
     let pct = bucket.used_percentage;
     let has_reset = bucket.resets_at != 0;
     if pct <= 0.0 && !has_reset {
@@ -531,7 +546,11 @@ fn render_rate_limit(lbl: &str, bucket: &RateLimitBucket, reset_fmt: &str) -> Op
     Some(out)
 }
 
-fn render_widget(name: &str, data: &SessionData, git: &GitContext) -> Option<String> {
+fn render_widget(
+    name: &str,
+    data: &SessionData,
+    git: &GitContext,
+) -> Option<String> {
     match name {
         "model" => {
             if data.model.display_name.is_empty() {
@@ -632,7 +651,9 @@ fn render_widget(name: &str, data: &SessionData, git: &GitContext) -> Option<Str
                 Some(format!("{GREEN}+{added}{RESET}/{RED}-{deleted}{RESET}"))
             }
         }
-        "last-commit" => git.last_commit().map(|s| format!("{} {s}", label("last"))),
+        "last-commit" => {
+            git.last_commit().map(|s| format!("{} {s}", label("last")))
+        }
         "git-status" => {
             let (staged, modified) = git.status_counts()?;
             if staged == 0 && modified == 0 {
@@ -797,7 +818,8 @@ mod tests {
     #[test]
     fn accepts_null_resets_at() {
         let json = r#"{"rate_limits":{"five_hour":{"used_percentage":73.2,"resets_at":null}}}"#;
-        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        let data: SessionData =
+            serde_json::from_str(json).expect("should parse");
         assert_eq!(data.rate_limits.five_hour.used_percentage, 73.2);
         assert_eq!(data.rate_limits.five_hour.resets_at, 0);
     }
@@ -805,14 +827,16 @@ mod tests {
     #[test]
     fn accepts_integer_resets_at() {
         let json = r#"{"rate_limits":{"five_hour":{"used_percentage":51,"resets_at":1776711600}}}"#;
-        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        let data: SessionData =
+            serde_json::from_str(json).expect("should parse");
         assert_eq!(data.rate_limits.five_hour.resets_at, 1_776_711_600);
     }
 
     #[test]
     fn accepts_rfc3339_resets_at() {
         let json = r#"{"rate_limits":{"five_hour":{"resets_at":"2026-04-20T00:00:00Z"}}}"#;
-        let data: SessionData = serde_json::from_str(json).expect("should parse");
+        let data: SessionData =
+            serde_json::from_str(json).expect("should parse");
         assert_eq!(data.rate_limits.five_hour.resets_at, 1_776_643_200);
     }
 
@@ -828,7 +852,8 @@ mod tests {
             used_percentage: 0.0,
             resets_at: 4_102_444_800,
         };
-        let out = render_rate_limit("5h", &bucket, "%H:%M").expect("should render");
+        let out =
+            render_rate_limit("5h", &bucket, "%H:%M").expect("should render");
         assert!(out.contains("0%"));
         assert!(out.contains("→"));
     }

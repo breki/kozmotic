@@ -12,8 +12,10 @@ fn is_muted() -> bool {
     mute_file_path().is_some_and(|p| p.exists())
 }
 
-const SOUND_STOP_CHIME: &[u8] = include_bytes!("../assets/sounds/stop-chime.mp3");
-const SOUND_NOTIFICATION_CHIME: &[u8] = include_bytes!("../assets/sounds/notification-chime.mp3");
+const SOUND_STOP_CHIME: &[u8] =
+    include_bytes!("../assets/sounds/stop-chime.mp3");
+const SOUND_NOTIFICATION_CHIME: &[u8] =
+    include_bytes!("../assets/sounds/notification-chime.mp3");
 const SOUND_ERROR: &[u8] = include_bytes!("../assets/sounds/error.mp3");
 
 const PRESET_NAMES: &[&str] = &["Stop", "StopFailure", "Notification"];
@@ -72,7 +74,8 @@ impl AgentPingError {
 fn emit_error(format: &OutputFormat, err: &AgentPingError) -> ExitCode {
     match format {
         OutputFormat::Json => {
-            let output = Output::error("agent-ping", err.code(), &err.to_string());
+            let output =
+                Output::error("agent-ping", err.code(), &err.to_string());
             eprintln!("{}", serde_json::to_string_pretty(&output).unwrap());
         }
         OutputFormat::Human => {
@@ -134,7 +137,12 @@ fn play_frequency(
     Ok(())
 }
 
-fn play_file(path: &str, volume: f32, repeat: u32, interval: u64) -> Result<(), AgentPingError> {
+fn play_file(
+    path: &str,
+    volume: f32,
+    repeat: u32,
+    interval: u64,
+) -> Result<(), AgentPingError> {
     let mut stream = rodio::OutputStreamBuilder::open_default_stream()
         .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
     stream.log_on_drop(false);
@@ -168,7 +176,10 @@ pub struct AgentPingArgs {
     pub dry_run: bool,
 }
 
-pub fn handle_agent_ping(format: &OutputFormat, args: AgentPingArgs) -> ExitCode {
+pub fn handle_agent_ping(
+    format: &OutputFormat,
+    args: AgentPingArgs,
+) -> ExitCode {
     let AgentPingArgs {
         sound,
         file,
@@ -244,7 +255,10 @@ pub fn handle_agent_ping(format: &OutputFormat, args: AgentPingArgs) -> ExitCode
     if let Some(ref name) = sound
         && get_preset(name).is_none()
     {
-        return emit_error(format, &AgentPingError::UnknownPreset(name.clone()));
+        return emit_error(
+            format,
+            &AgentPingError::UnknownPreset(name.clone()),
+        );
     }
 
     // Validate file exists

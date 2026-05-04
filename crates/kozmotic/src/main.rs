@@ -115,7 +115,10 @@ fn main() -> ExitCode {
             match cli.format {
                 OutputFormat::Json => {
                     let output = output::Output::success("example", data);
-                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&output).unwrap()
+                    );
                 }
                 OutputFormat::Human => {
                     println!("Hello, {name}!");

@@ -1,128 +1,76 @@
-use crate::helpers::{elapsed_str, run_cargo, step_output};
 use std::time::Instant;
 
+use crate::clippy_cmd;
+use crate::coverage;
+use crate::fmt_cmd;
+use crate::helpers::{elapsed_str, step_output};
+use crate::test_cmd;
+
+const TOTAL_STEPS: usize = 4;
+
 pub fn validate() -> Result<(), String> {
-    let total_start = Instant::now();
-    let total_steps = 4;
+    let overall_start = Instant::now();
 
-    // Step 1: Format check
-    let start = Instant::now();
-    let output = run_cargo(&["fmt", "--all", "--", "--check"])?;
-    if !output.status.success() {
-        step_output(1, total_steps, "Format", "FAILED", "");
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        eprintln!("{stderr}{stdout}");
-        std::process::exit(2);
-    }
-    step_output(1, total_steps, "Format", "OK", &elapsed_str(start));
+    run_step(1, "Fmt", run_fmt)?;
+    run_step(2, "Clippy", run_clippy)?;
+    run_step(3, "Test", run_test)?;
+    run_step(4, "Coverage", run_coverage)?;
 
-    // Step 2: Clippy
-    let start = Instant::now();
-    let output = run_cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
-    if !output.status.success() {
-        step_output(2, total_steps, "Clippy", "FAILED", "");
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("{stderr}");
-        std::process::exit(3);
-    }
-    step_output(2, total_steps, "Clippy", "OK", &elapsed_str(start));
-
-    // Step 3: Tests
-    let start = Instant::now();
-    let output = run_cargo(&["test"])?;
-    if !output.status.success() {
-        step_output(3, total_steps, "Test", "FAILED", "");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("{stderr}{stdout}");
-        std::process::exit(4);
-    }
-    step_output(3, total_steps, "Test", "OK", &elapsed_str(start));
-
-    // Step 4: Coverage (report only, no threshold)
-    let start = Instant::now();
-    let coverage = run_coverage();
-    match coverage {
-        Ok(pct) => {
-            step_output(
-                4,
-                total_steps,
-                "Coverage",
-                "OK",
-                &format!("{pct:.1}%, {}", elapsed_str(start)),
-            );
-        }
-        Err(e) => {
-            step_output(
-                4,
-                total_steps,
-                "Coverage",
-                "SKIP",
-                &format!("{e}, {}", elapsed_str(start)),
-            );
-        }
-    }
-
-    println!("Validate OK ({})", elapsed_str(total_start));
+    println!("Validate OK ({})", elapsed_str(overall_start));
     Ok(())
 }
 
-/// Run cargo llvm-cov and extract the total line coverage percentage.
-/// Returns Ok(percentage) or Err with a reason string.
-fn run_coverage() -> Result<f64, String> {
-    let output = run_cargo(&["llvm-cov", "--package", "kozmotic", "--bins", "--tests"])?;
-
-    if !output.status.success() {
-        return Err("llvm-cov not available".to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_coverage_total(&stdout)
-}
-
-/// Parse the TOTAL line from cargo llvm-cov text output.
-/// Looks for "TOTAL" line and extracts the line coverage percentage.
-fn parse_coverage_total(output: &str) -> Result<f64, String> {
-    for line in output.lines() {
-        if line.starts_with("TOTAL") {
-            // Format: TOTAL  regions  missed  cover%  functions  missed  cover%  lines  missed  cover%
-            // The line coverage % is the last percentage before any branch columns
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            // Find percentages (contain %)
-            let percentages: Vec<f64> = parts
-                .iter()
-                .filter(|p| p.ends_with('%'))
-                .filter_map(|p| p.trim_end_matches('%').parse::<f64>().ok())
-                .collect();
-            // Third percentage is line coverage
-            if percentages.len() >= 3 {
-                return Ok(percentages[2]);
-            }
+fn run_step(
+    step: usize,
+    name: &str,
+    f: fn() -> Result<String, String>,
+) -> Result<(), String> {
+    let start = Instant::now();
+    match f() {
+        Ok(detail) => {
+            let time = elapsed_str(start);
+            let full = if detail.is_empty() {
+                time
+            } else {
+                format!("{detail}, {time}")
+            };
+            step_output(step, TOTAL_STEPS, name, "OK", &full);
+            Ok(())
+        }
+        Err(e) => {
+            step_output(step, TOTAL_STEPS, name, "FAILED", "");
+            Err(e)
         }
     }
-    Err("could not parse coverage".to_string())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn run_fmt() -> Result<String, String> {
+    fmt_cmd::fmt_check()?;
+    Ok(String::new())
+}
 
-    #[test]
-    fn test_parse_coverage_total() {
-        let output = "\
-Filename                      Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-agent_ping.rs                     396               230    41.92%          18                 9    50.00%         242               131    45.87%           0                 0         -
-main.rs                            50                 4    92.00%           2                 1    50.00%          44                 3    93.18%           0                 0         -
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-TOTAL                             571               277    51.49%          27                12    55.56%         380               162    57.37%           0                 0         -";
-        assert_eq!(parse_coverage_total(output).unwrap(), 57.37);
+fn run_clippy() -> Result<String, String> {
+    let r = clippy_cmd::clippy_check()?;
+    match r.error {
+        None => Ok(String::new()),
+        Some(err) => {
+            for line in r.items.iter().take(5) {
+                eprintln!("  {line}");
+            }
+            Err(err)
+        }
     }
+}
 
-    #[test]
-    fn test_parse_coverage_no_total() {
-        let output = "some random output";
-        assert!(parse_coverage_total(output).is_err());
+fn run_test() -> Result<String, String> {
+    test_cmd::test_check(None)?;
+    Ok(String::new())
+}
+
+fn run_coverage() -> Result<String, String> {
+    let r = coverage::coverage_check()?;
+    match r.error {
+        None => Ok(format!("{:.1}% >= {}%", r.line_pct, coverage::THRESHOLD,)),
+        Some(err) => Err(err),
     }
 }

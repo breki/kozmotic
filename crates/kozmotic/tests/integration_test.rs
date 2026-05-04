@@ -520,10 +520,11 @@ fn test_status_line_empty_stdin() {
 // --- self install tests ---
 
 fn temp_install_dir(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir()
-            .join("kozmotic-test")
-            .join(format!("{}-{}", std::process::id(), name));
+    let dir = std::env::temp_dir().join("kozmotic-test").join(format!(
+        "{}-{}",
+        std::process::id(),
+        name
+    ));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
