@@ -9,6 +9,34 @@ Newest entries first.
 
 ---
 
+## 2026-08-03
+
+- **`xtask/src/validate.rs` ships a trailing comma that
+  fails clippy on Rust >= 1.97.** Line 73's
+  `format!("{:.1}% >= {}%", r.line_pct,
+  coverage::THRESHOLD,)` trips the
+  `unnecessary_trailing_comma` lint added in clippy
+  1.97, so `cargo clippy --all-targets -- -D warnings`
+  fails in CI for any project using the template's
+  xtask. **Suggested fix:** drop the trailing comma
+  upstream.
+
+- **`rust-toolchain.toml` pins `channel = "stable"`,
+  which silently drifts from CI.** CI installs `stable`
+  fresh on every run, but a developer's local `stable`
+  is whatever `rustup update` last fetched. kozmotic
+  ran a March toolchain (1.94.1) against a July CI
+  stable (1.97.1), so `cargo xtask validate` passed
+  locally while CI's clippy job failed on a newer
+  lint -- and stayed red for three months unnoticed,
+  because validate is the only gate developers see.
+  **Suggested fix:** have `xtask validate` warn when
+  the active toolchain is more than N weeks behind the
+  latest stable release, or document that a
+  `rustup update` belongs in the release checklist.
+
+---
+
 ## 2026-05-04
 
 - **Coverage `IGNORE_REGEX` is a hardcoded const in
