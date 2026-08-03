@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-03
+
 ### Added
 
 - `git-lines` status-line widget shows added/deleted
@@ -37,9 +39,6 @@ and this project adheres to
   or the session JSON is malformed, so failures are
   visible in the Claude Code status bar instead of
   silently collapsing to an empty line.
-
-### Changed
-
 - `duration` and `api-duration` status-line widgets now
   scale to hours and days for long sessions, rendering
   `Xh Ym` past one hour and `Xd Yh` past one day instead
