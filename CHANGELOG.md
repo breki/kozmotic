@@ -20,6 +20,12 @@ and this project adheres to
   runtime requirements: the ALSA shared library on
   Linux, the minimum glibc, and clearing the macOS
   Gatekeeper quarantine attribute.
+- Release archives now carry an `INSTALL.md` written
+  for that platform alone — install, Claude Code
+  wiring, uninstall, and troubleshooting — alongside
+  the binary and the licence. Nothing developer-facing
+  ships in a release archive. The same guides live in
+  `docs/install/`.
 
 ### Changed
 

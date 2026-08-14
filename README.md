@@ -48,6 +48,13 @@ extract it, then install it to `~/.claude/bin/`:
 | `aarch64-apple-darwin` | macOS on Apple silicon |
 | `x86_64-apple-darwin` | macOS on Intel |
 
+Every archive ships the binary, the licence, and an
+`INSTALL.md` written for that platform alone. The same
+guides live here:
+[Linux](docs/install/linux.md) ·
+[Windows](docs/install/windows.md) ·
+[macOS](docs/install/macos.md).
+
 #### Runtime requirements
 
 - **Linux: ALSA must be installed.** The binary links

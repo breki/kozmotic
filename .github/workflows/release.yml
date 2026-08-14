@@ -26,18 +26,23 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
             archive: tar.gz
+            install_doc: docs/install/linux.md
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
             archive: tar.gz
+            install_doc: docs/install/linux.md
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             archive: zip
+            install_doc: docs/install/windows.md
           - target: aarch64-apple-darwin
             runner: macos-latest
             archive: tar.gz
+            install_doc: docs/install/macos.md
           - target: x86_64-apple-darwin
             runner: macos-latest
             archive: tar.gz
+            install_doc: docs/install/macos.md
     steps:
       - uses: actions/checkout@v4
 
@@ -79,6 +84,7 @@ jobs:
           STAGING="${{ steps.archive.outputs.name }}"
           mkdir "$STAGING"
           cp target/${{ matrix.target }}/release/kozmotic "$STAGING/"
+          cp "${{ matrix.install_doc }}" "$STAGING/INSTALL.md"
           cp LICENSE "$STAGING/"
           tar czf "${STAGING}.tar.gz" "$STAGING"
 
@@ -89,6 +95,7 @@ jobs:
           STAGING="${{ steps.archive.outputs.name }}"
           mkdir "$STAGING"
           cp target/${{ matrix.target }}/release/kozmotic.exe "$STAGING/"
+          cp "${{ matrix.install_doc }}" "$STAGING/INSTALL.md"
           cp LICENSE "$STAGING/"
           7z a "${STAGING}.zip" "$STAGING"
 
