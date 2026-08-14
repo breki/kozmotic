@@ -10,6 +10,36 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `host` status-line widget shows the machine's short
+  host name, e.g. `host devbox`.
+- `ram` status-line widget shows RAM used against
+  installed, e.g. `ram 12.4/31.3G`, colored green/
+  yellow/red at 50%/80% like `context`.
+- `disk` status-line widget shows used against total
+  space on the filesystem holding the session's
+  working directory, e.g. `disk 210/468G`.
+
+### Fixed
+
+- `api-status` no longer disappears when
+  status.claude.com cannot be reached — the exact
+  case where the widget matters most. It now shows the
+  last known indicator marked stale (`api outage~`),
+  or `api unknown` when nothing is cached.
+- `api-status` HTTP requests are now capped (1.5s
+  connect, 2.5s total) and failed lookups are retried
+  at most every 30 seconds, so an unreachable status
+  page can no longer stall or blank the status line.
+
+### Changed
+
+- The `api-status` cache file now stores JSON with the
+  last successful fetch and last attempt time instead
+  of a bare indicator string. An older cache file is
+  ignored and rewritten on first use.
+
 ## [1.1.0] - 2026-08-03
 
 ### Added

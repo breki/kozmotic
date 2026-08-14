@@ -1,5 +1,6 @@
 use std::cell::OnceCell;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::SystemTime;
 
@@ -7,6 +8,10 @@ use chrono::{DateTime, Local};
 use serde::Deserialize;
 
 mod api_status;
+mod system;
+
+use api_status::ApiHealth;
+use system::{Mount, Usage};
 
 #[derive(Deserialize, Default)]
 struct SessionData {
@@ -149,13 +154,14 @@ pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
     };
 
     let git = GitContext::default();
+    let sys = SystemContext::default();
     // Support multi-line: split on ";" to get lines
     let lines: Vec<&str> = args.show.split(';').collect();
     for line_spec in &lines {
         let widgets: Vec<&str> = line_spec.split(',').map(str::trim).collect();
         let parts: Vec<String> = widgets
             .iter()
-            .filter_map(|w| render_widget(w, &data, &git))
+            .filter_map(|w| render_widget(w, &data, &git, &sys))
             .collect();
         if !parts.is_empty() {
             println!("{}", parts.join(&args.separator));
@@ -468,6 +474,42 @@ impl GitContext {
     }
 }
 
+/// Lazily-probed host information, shared across the `host`, `ram`,
+/// and `disk` widgets so a single render probes the system at most
+/// once per kind of data.
+#[derive(Default)]
+struct SystemContext {
+    host_name: OnceCell<Option<String>>,
+    memory: OnceCell<Option<Usage>>,
+    mounts: OnceCell<Vec<Mount>>,
+}
+
+impl SystemContext {
+    fn host_name(&self) -> Option<&str> {
+        self.host_name.get_or_init(system::host_name).as_deref()
+    }
+
+    fn memory(&self) -> Option<Usage> {
+        *self.memory.get_or_init(system::memory_usage)
+    }
+
+    /// Usage of the filesystem holding `dir`.
+    fn disk(&self, dir: &Path) -> Option<Usage> {
+        let mounts = self.mounts.get_or_init(system::mounts);
+        system::mount_for(mounts, dir).map(|m| m.usage)
+    }
+}
+
+/// The directory the session is working in: the workspace path from
+/// the session JSON, falling back to the process's own directory.
+fn session_dir(data: &SessionData) -> PathBuf {
+    if data.workspace.current_dir.is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        PathBuf::from(&data.workspace.current_dir)
+    }
+}
+
 const DIM: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 const CYAN: &str = "\x1b[36m";
@@ -477,6 +519,48 @@ const RED: &str = "\x1b[31m";
 
 fn label(name: &str) -> String {
     format!("{DIM}{name}{RESET}")
+}
+
+/// Shared "how full is it" scale: green below half, yellow from half,
+/// red from 80%. Used by `context`, `ram`, and `disk` so a glance
+/// means the same thing everywhere on the line.
+fn usage_color(pct: f64) -> &'static str {
+    if pct >= 80.0 {
+        RED
+    } else if pct >= 50.0 {
+        YELLOW
+    } else {
+        GREEN
+    }
+}
+
+/// `ram 12.4/31.3G` — the figure colored by how full it is.
+fn render_usage(lbl: &str, usage: Usage) -> String {
+    let color = usage_color(usage.percentage());
+    format!("{} {color}{}{RESET}", label(lbl), usage.render())
+}
+
+fn render_api_health(health: &ApiHealth) -> String {
+    let (text, color) = match health {
+        ApiHealth::Current(indicator) => indicator_text(indicator),
+        // Trailing "~": last known value, status page unreachable.
+        ApiHealth::Stale(indicator) => {
+            let (text, color) = indicator_text(indicator);
+            return format!("{} {color}{text}~{RESET}", label("api"));
+        }
+        ApiHealth::Unknown => ("unknown", YELLOW),
+    };
+    format!("{} {color}{text}{RESET}", label("api"))
+}
+
+fn indicator_text(indicator: &str) -> (&'static str, &'static str) {
+    match indicator {
+        "none" => ("ok", GREEN),
+        "minor" => ("degraded", YELLOW),
+        "major" => ("outage", RED),
+        "critical" => ("critical", RED),
+        _ => ("unknown", YELLOW),
+    }
 }
 
 fn render_rate_limit(
@@ -501,6 +585,7 @@ fn render_widget(
     name: &str,
     data: &SessionData,
     git: &GitContext,
+    sys: &SystemContext,
 ) -> Option<String> {
     match name {
         "model" => {
@@ -512,13 +597,7 @@ fn render_widget(
         }
         "context" => {
             let pct = data.context_window.used_percentage;
-            let color = if pct >= 80.0 {
-                RED
-            } else if pct >= 50.0 {
-                YELLOW
-            } else {
-                GREEN
-            };
+            let color = usage_color(pct);
             Some(format!("{} {color}{pct:.1}%{RESET}", label("ctx")))
         }
         "cost" => {
@@ -666,17 +745,12 @@ fn render_widget(
                 Some(format!("{} {}", label("agent"), data.agent.name))
             }
         }
-        "api-status" => {
-            let indicator = api_status::get_api_status()?;
-            let (symbol, color) = match indicator.as_str() {
-                "none" => ("ok", GREEN),
-                "minor" => ("degraded", YELLOW),
-                "major" => ("outage", RED),
-                "critical" => ("critical", RED),
-                _ => ("?", YELLOW),
-            };
-            Some(format!("{} {color}{symbol}{RESET}", label("api")))
-        }
+        "api-status" => Some(render_api_health(&api_status::get_api_status())),
+        "host" => sys.host_name().map(|h| format!("{} {h}", label("host"))),
+        "ram" => sys.memory().map(|usage| render_usage("ram", usage)),
+        "disk" => sys
+            .disk(&session_dir(data))
+            .map(|usage| render_usage("disk", usage)),
         _ => None,
     }
 }
@@ -789,6 +863,98 @@ mod tests {
         let data: SessionData =
             serde_json::from_str(json).expect("should parse");
         assert_eq!(data.rate_limits.five_hour.resets_at, 1_776_643_200);
+    }
+
+    #[test]
+    fn usage_color_thresholds() {
+        assert_eq!(usage_color(0.0), GREEN);
+        assert_eq!(usage_color(49.9), GREEN);
+        assert_eq!(usage_color(50.0), YELLOW);
+        assert_eq!(usage_color(79.9), YELLOW);
+        assert_eq!(usage_color(80.0), RED);
+        assert_eq!(usage_color(100.0), RED);
+    }
+
+    #[test]
+    fn render_usage_colors_by_fullness() {
+        let usage = Usage {
+            used: 1,
+            total: 100,
+        };
+        let out = render_usage("ram", usage);
+        assert!(out.contains("ram"));
+        assert!(out.contains("1/100B"));
+        assert!(out.contains(GREEN));
+    }
+
+    #[test]
+    fn api_health_renders_each_indicator() {
+        let cases = [
+            ("none", "ok", GREEN),
+            ("minor", "degraded", YELLOW),
+            ("major", "outage", RED),
+            ("critical", "critical", RED),
+            ("something-new", "unknown", YELLOW),
+        ];
+        for (indicator, text, color) in cases {
+            let out =
+                render_api_health(&ApiHealth::Current(indicator.to_string()));
+            assert!(out.contains(text), "{indicator} -> {out}");
+            assert!(out.contains(color), "{indicator} -> {out}");
+        }
+    }
+
+    /// The outage bug: an unreachable status page used to hide the
+    /// widget entirely, which reads as "no problem" rather than
+    /// "no answer".
+    #[test]
+    fn api_health_unknown_still_renders() {
+        let out = render_api_health(&ApiHealth::Unknown);
+        assert!(out.contains("api"));
+        assert!(out.contains("unknown"));
+        assert!(out.contains(YELLOW));
+    }
+
+    #[test]
+    fn api_health_stale_is_marked() {
+        let out = render_api_health(&ApiHealth::Stale("major".to_string()));
+        assert!(out.contains("outage~"));
+        assert!(out.contains(RED));
+    }
+
+    #[test]
+    fn session_dir_prefers_workspace() {
+        let mut data = SessionData::default();
+        data.workspace.current_dir = "/tmp/somewhere".to_string();
+        assert_eq!(session_dir(&data), PathBuf::from("/tmp/somewhere"));
+    }
+
+    #[test]
+    fn session_dir_falls_back_to_process_dir() {
+        let data = SessionData::default();
+        let expected =
+            std::env::current_dir().expect("process should have a cwd");
+        assert_eq!(session_dir(&data), expected);
+    }
+
+    #[test]
+    fn host_widgets_render() {
+        let data = SessionData::default();
+        let git = GitContext::default();
+        let sys = SystemContext::default();
+        for widget in ["host", "ram", "disk"] {
+            let out = render_widget(widget, &data, &git, &sys)
+                .unwrap_or_else(|| panic!("{widget} should render"));
+            assert!(!out.is_empty());
+        }
+    }
+
+    #[test]
+    fn unknown_widget_renders_nothing() {
+        let data = SessionData::default();
+        let git = GitContext::default();
+        let sys = SystemContext::default();
+        assert_eq!(render_widget("nope", &data, &git, &sys), None);
     }
 
     #[test]

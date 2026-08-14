@@ -413,14 +413,91 @@ fn test_status_line_git_branch() {
 
 #[test]
 fn test_status_line_api_status() {
-    // Just check it runs without error - actual status depends on Anthropic
+    // The exact health depends on Anthropic and on network reach, but
+    // the widget must always produce a line: a vanishing api widget
+    // looks identical to a healthy API, which is how an outage went
+    // unreported.
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.arg("status-line")
         .arg("--show")
         .arg("api-status")
         .write_stdin(FULL_STATUS_JSON)
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("api"))
+        .stdout(
+            predicate::str::is_match(r"ok|degraded|outage|critical|unknown")
+                .expect("valid regex"),
+        );
+}
+
+#[test]
+fn test_status_line_host() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("host")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        // The label carries ANSI codes, so match around them.
+        .stdout(
+            predicate::str::is_match(r"host\x1b\[0m \S+").expect("valid regex"),
+        );
+}
+
+#[test]
+fn test_status_line_ram() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("ram")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        // e.g. "ram 12.4/31.3G"
+        .stdout(
+            predicate::str::is_match(r"ram.*\d+(\.\d)?/\d+(\.\d)?[BKMGT]")
+                .expect("valid regex"),
+        );
+}
+
+#[test]
+fn test_status_line_disk() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("disk")
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::is_match(r"disk.*\d+(\.\d)?/\d+(\.\d)?[BKMGT]")
+                .expect("valid regex"),
+        );
+}
+
+#[test]
+fn test_status_line_disk_uses_workspace_dir() {
+    // An unknown workspace path must still resolve to some mount
+    // rather than blanking the widget.
+    let json = r#"{
+        "model": {},
+        "context_window": {},
+        "cost": {},
+        "workspace": { "current_dir": "/nonexistent/path/xyz" }
+    }"#;
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("disk")
+        .write_stdin(json)
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::is_match(r"disk.*\d+(\.\d)?/\d+(\.\d)?[BKMGT]")
+                .expect("valid regex"),
+        );
 }
 
 #[test]

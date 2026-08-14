@@ -8,6 +8,35 @@ small tweaks don't need entries.
 
 ---
 
+### 2026-08-14
+
+- Host widgets and an api-status that never hides
+
+    Added `host`, `ram`, and `disk` status-line
+    widgets, backed by a new `sysinfo` dependency.
+    Hand-rolling this was rejected: cross-platform
+    free-space queries need `statvfs` /
+    `GetDiskFreeSpaceEx`, and the workspace forbids
+    unsafe code, so the alternative was shelling out
+    to `df`/`wmic`. `disk` resolves the mount by
+    longest path-prefix match on the session's
+    working directory, which makes it report the
+    volume the user is actually filling up.
+
+    `api-status` used to return `Option<String>` and
+    vanish whenever the fetch failed — during the
+    outage of 2026-08-14 it showed nothing, which is
+    visually identical to a healthy API. The domain
+    type is now an `ApiHealth` enum with no empty
+    case (`Current` / `Stale` / `Unknown`). The
+    deeper cause was the missing timeout: an
+    unresponsive status page blocked the render until
+    Claude Code gave up on the command. Requests are
+    now bounded (1.5s connect, 2.5s total) and the
+    cache records failed attempts so an outage is
+    retried at most every 30 seconds instead of on
+    every prompt.
+
 ### 2026-03-25
 
 - Initial project setup and restructuring

@@ -136,12 +136,31 @@ session field costs nothing.
 | `worktree` | Active worktree name | `wt feature-x` |
 | `agent` | Active agent name | `agent Explore` |
 | `api-status` | status.claude.com health, cached 2 min | `api ok`, `api degraded`, `api outage` |
+| `host` | Machine's short host name | `host devbox` |
+| `ram` | RAM used/installed, colored at 50/80% | `ram 12.4/31.3G` |
+| `disk` | Disk used/total for the session's filesystem | `disk 210/468G` |
 
 All `git-*` widgets share a per-render cache, so each
 underlying `git` command runs at most once regardless of
-how many are configured. `api-status` performs an HTTP
-request (cached for two minutes) — omit it if you want a
-fully offline status line.
+how many are configured. The same applies to `host`,
+`ram`, and `disk`, which probe the system at most once
+per render.
+
+`disk` reports the filesystem holding the session's
+working directory (`workspace.current_dir`, falling back
+to the process's own directory) — on a machine with a
+separate `/home` or a mounted project volume, that is the
+volume you are actually filling up. Sizes are binary
+(1 G = 1024 M).
+
+`api-status` performs an HTTP request (cached for two
+minutes) — omit it if you want a fully offline status
+line. It never renders empty: if status.claude.com cannot
+be reached it shows the last known value with a trailing
+`~` (`api outage~`), or `api unknown` when nothing was
+cached. Failed lookups are retried at most every 30
+seconds, and each request is capped at 2.5 seconds so a
+status-page outage cannot stall the status line.
 
 ## Output Format
 

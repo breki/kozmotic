@@ -24,7 +24,7 @@ status-line` for the Claude Code status bar.
 
 2. **Offer a preset** using AskUserQuestion.
 
-   There are 22 widgets, and AskUserQuestion allows
+   There are 25 widgets, and AskUserQuestion allows
    at most 4 options per question, so never try to
    enumerate widgets as options. Offer bundles
    instead.
@@ -76,6 +76,9 @@ status-line` for the Claude Code status bar.
    | `worktree` | Active worktree name | `wt feature-x` |
    | `agent` | Active agent name | `agent Explore` |
    | `api-status` | status.claude.com health, cached 2 min | `api ok`, `api degraded`, `api outage` |
+   | `host` | Machine's short host name | `host devbox` |
+   | `ram` | RAM used/installed, colored at 50/80% | `ram 12.4/31.3G` |
+   | `disk` | Disk used/total for the session's filesystem | `disk 210/468G` |
 
    Notes worth passing on when relevant:
    - `cost-rate` is hidden until the session has
@@ -87,7 +90,14 @@ status-line` for the Claude Code status bar.
      a reset time is present, even at 0% usage.
    - `api-status` makes an HTTP call (2-minute cache);
      skip it if the user wants a fully offline status
-     line.
+     line. It always renders something — `api ok~`
+     means the value is stale because the status page
+     was unreachable, `api unknown` means nothing is
+     cached.
+   - `host`, `ram`, and `disk` read local system state
+     and cost nothing extra when combined. `disk`
+     reports the filesystem holding the session's
+     working directory.
 
 3. **Ask about separator** using AskUserQuestion:
 
