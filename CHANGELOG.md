@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-14
+
 ### Added
 
 - Release builds for `aarch64-unknown-linux-gnu`, so
