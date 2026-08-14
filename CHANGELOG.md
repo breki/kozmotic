@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-14
+
 ### Added
 
 - `host` status-line widget shows the machine's short
