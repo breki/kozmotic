@@ -13,12 +13,14 @@ const MODULE_THRESHOLD: f64 = 85.0;
 /// - `src/main.rs` -- thin clap dispatch wrapper
 /// - `agent_ping/playback.rs` -- hardware-bound audio
 ///   playback that requires a real output device
-/// - `status_line/api_status.rs` -- network-bound status
-///   fetching from status.claude.com
+/// - `status_line/api_status/io.rs` -- network-bound
+///   status fetching from status.claude.com. Only the
+///   I/O half is excluded; the cache and rendering logic
+///   in `api_status.rs` is measured like everything else.
 const IGNORE_REGEX: &str = concat!(
     r"src[/\\]main\.rs$",
     r"|agent_ping[/\\]playback\.rs$",
-    r"|status_line[/\\]api_status\.rs$",
+    r"|status_line[/\\]api_status[/\\]io\.rs$",
 );
 
 pub struct CoverageResult {

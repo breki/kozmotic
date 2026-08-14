@@ -4,9 +4,12 @@
 //! (unit selection, mount matching) is pure so it can be tested
 //! without a particular machine shape.
 
+use std::cell::OnceCell;
 use std::path::{Path, PathBuf};
 
 use sysinfo::{DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
+
+use super::theme::{RESET, label, usage_color};
 
 /// A used-of-total byte quantity: RAM, or a mounted filesystem.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -108,6 +111,59 @@ impl Unit {
 pub struct Mount {
     pub mount_point: PathBuf,
     pub usage: Usage,
+}
+
+/// Lazily-probed host information, shared across the `host`, `ram`,
+/// and `disk` widgets so a single render probes the system at most
+/// once per kind of data.
+pub struct SystemContext {
+    /// The directory whose filesystem `disk` reports on, resolved
+    /// once when the render starts.
+    dir: PathBuf,
+    host_name: OnceCell<Option<String>>,
+    memory: OnceCell<Option<Usage>>,
+    mounts: OnceCell<Vec<Mount>>,
+}
+
+impl SystemContext {
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            host_name: OnceCell::new(),
+            memory: OnceCell::new(),
+            mounts: OnceCell::new(),
+        }
+    }
+
+    fn host_name(&self) -> Option<&str> {
+        self.host_name.get_or_init(host_name).as_deref()
+    }
+
+    fn memory(&self) -> Option<Usage> {
+        *self.memory.get_or_init(memory_usage)
+    }
+
+    fn disk(&self) -> Option<Usage> {
+        let mounts = self.mounts.get_or_init(mounts);
+        mount_for(mounts, &self.dir).map(|m| m.usage)
+    }
+}
+
+/// `ram 12.4/31.3G` — the figure colored by how full it is.
+fn render_usage(lbl: &str, usage: Usage) -> String {
+    let color = usage_color(usage.percentage());
+    format!("{} {color}{}{RESET}", label(lbl), usage.render())
+}
+
+/// Render a host-backed widget, or `None` when the name belongs to
+/// another family or the platform reports nothing.
+pub fn render(name: &str, sys: &SystemContext) -> Option<String> {
+    match name {
+        "host" => sys.host_name().map(|h| format!("{} {h}", label("host"))),
+        "ram" => sys.memory().map(|usage| render_usage("ram", usage)),
+        "disk" => sys.disk().map(|usage| render_usage("disk", usage)),
+        _ => None,
+    }
 }
 
 /// The machine's short host name (domain suffix stripped).
@@ -303,6 +359,34 @@ mod tests {
         let name = host_name().expect("host should have a name");
         assert!(!name.is_empty());
         assert!(!name.contains('.'));
+    }
+
+    #[test]
+    fn render_usage_colors_by_fullness() {
+        let usage = Usage {
+            used: 1,
+            total: 100,
+        };
+        let out = render_usage("ram", usage);
+        assert!(out.contains("ram"));
+        assert!(out.contains("1/100B"));
+        assert!(out.contains(super::super::theme::GREEN));
+    }
+
+    #[test]
+    fn host_widgets_render_on_this_machine() {
+        let sys = SystemContext::new(PathBuf::from("."));
+        for widget in ["host", "ram", "disk"] {
+            let out = render(widget, &sys)
+                .unwrap_or_else(|| panic!("{widget} should render"));
+            assert!(!out.is_empty());
+        }
+    }
+
+    #[test]
+    fn foreign_widget_name_is_declined() {
+        let sys = SystemContext::new(PathBuf::from("."));
+        assert_eq!(render("model", &sys), None);
     }
 
     #[test]

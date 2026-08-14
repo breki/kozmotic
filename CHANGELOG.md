@@ -29,6 +29,13 @@ and this project adheres to
 
 ### Changed
 
+- The `status-line` implementation is split into
+  modules by the data each widget reads — `session`,
+  `git`, `system`, `api_status` — over shared `format`
+  and `theme` modules. Each module declines widget
+  names it does not own, so dispatch is a chain of
+  families rather than one 170-line match. Rendered
+  output is unchanged.
 - Linux release binaries are now built on
   `ubuntu-22.04` instead of `ubuntu-latest`. The
   runner's glibc becomes the minimum glibc of every

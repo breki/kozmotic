@@ -1,11 +1,13 @@
 /# TODO
 
-- Split the status line widgets into their own modules. 
 - Provide a CLI switch for right-aligning certain status line widgets.
 - Update README with new features and installation instructions.
 
 ## Done
 
+- Split the status-line widgets into modules by the
+  data they read (session, git, system, api_status)
+  with shared `format` and `theme` (2026-08-14)
 - Release archives are binary-only plus a per-OS
   `INSTALL.md`; added an ARM Linux build and lowered
   the glibc floor to 2.35 (2026-08-14)

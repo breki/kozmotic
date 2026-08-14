@@ -1,14 +1,15 @@
-// Network-bound status.claude.com fetching. Excluded from
-// coverage because it requires network access and a live
-// status page; the pure cache-decision logic below is still
-// unit-tested.
-
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+//! The `api-status` widget: what status.claude.com says about the
+//! Claude API, and how that reads on the status line.
+//!
+//! The network and filesystem work lives in [`io`], which coverage
+//! ignores; everything here is pure and tested.
 
 use serde::{Deserialize, Serialize};
 
-const STATUS_CACHE_FILE: &str = "kozmotic-api-status.json";
+use super::theme::{GREEN, RED, RESET, YELLOW, label};
+
+mod io;
+
 /// How long a successfully fetched indicator is served without
 /// touching the network.
 const FRESH_TTL_SECS: u64 = 120;
@@ -16,9 +17,6 @@ const FRESH_TTL_SECS: u64 = 120;
 /// this, an outage would make every single status-line render pay the
 /// full connect timeout.
 const RETRY_COOLDOWN_SECS: u64 = 30;
-const CONNECT_TIMEOUT: Duration = Duration::from_millis(1500);
-const GLOBAL_TIMEOUT: Duration = Duration::from_millis(2500);
-const STATUS_URL: &str = "https://status.claude.com/api/v2/summary.json";
 
 /// What we know about the Claude API's health right now.
 ///
@@ -34,16 +32,6 @@ pub enum ApiHealth {
     Stale(String),
     /// The status page could not be reached and nothing was cached.
     Unknown,
-}
-
-#[derive(Deserialize)]
-struct StatusPageResponse {
-    status: StatusPageStatus,
-}
-
-#[derive(Deserialize)]
-struct StatusPageStatus {
-    indicator: String,
 }
 
 /// On-disk cache. `checked_at` records every attempt (successful or
@@ -65,16 +53,6 @@ enum CacheDecision {
     Serve(ApiHealth),
     /// Hit the network, falling back to this if the call fails.
     Fetch(ApiHealth),
-}
-
-fn status_cache_path() -> PathBuf {
-    std::env::temp_dir().join(STATUS_CACHE_FILE)
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
 }
 
 /// The fallback health implied by a (possibly absent) cache record.
@@ -99,59 +77,36 @@ fn decide(record: Option<&CacheRecord>, now: u64) -> CacheDecision {
     CacheDecision::Fetch(fallback(record))
 }
 
-fn read_cache() -> Option<CacheRecord> {
-    let raw = std::fs::read_to_string(status_cache_path()).ok()?;
-    serde_json::from_str(&raw).ok()
-}
-
-fn write_cache(record: &CacheRecord) {
-    if let Ok(raw) = serde_json::to_string(record) {
-        let _ = std::fs::write(status_cache_path(), raw);
-    }
-}
-
-fn fetch_indicator() -> Option<String> {
-    let config = ureq::Agent::config_builder()
-        .timeout_connect(Some(CONNECT_TIMEOUT))
-        .timeout_global(Some(GLOBAL_TIMEOUT))
-        .build();
-    let body: String = config
-        .new_agent()
-        .get(STATUS_URL)
-        .call()
-        .ok()?
-        .into_body()
-        .read_to_string()
-        .ok()?;
-    let parsed: StatusPageResponse = serde_json::from_str(&body).ok()?;
-    Some(parsed.status.indicator)
-}
-
-pub fn get_api_status() -> ApiHealth {
-    let record = read_cache();
-    let now = now_secs();
-    let previous = match decide(record.as_ref(), now) {
-        CacheDecision::Serve(health) => return health,
-        CacheDecision::Fetch(previous) => previous,
+fn render_api_health(health: &ApiHealth) -> String {
+    let (text, color) = match health {
+        ApiHealth::Current(indicator) => indicator_text(indicator),
+        // Trailing "~": last known value, status page unreachable.
+        ApiHealth::Stale(indicator) => {
+            let (text, color) = indicator_text(indicator);
+            return format!("{} {color}{text}~{RESET}", label("api"));
+        }
+        ApiHealth::Unknown => ("unknown", YELLOW),
     };
+    format!("{} {color}{text}{RESET}", label("api"))
+}
 
-    if let Some(indicator) = fetch_indicator() {
-        write_cache(&CacheRecord {
-            indicator: Some(indicator.clone()),
-            fetched_at: now,
-            checked_at: now,
-        });
-        ApiHealth::Current(indicator)
-    } else {
-        // Record the failed attempt so the next render doesn't pay the
-        // timeout again, but keep the last known indicator.
-        write_cache(&CacheRecord {
-            indicator: record.as_ref().and_then(|r| r.indicator.clone()),
-            fetched_at: record.as_ref().map_or(0, |r| r.fetched_at),
-            checked_at: now,
-        });
-        previous
+fn indicator_text(indicator: &str) -> (&'static str, &'static str) {
+    match indicator {
+        "none" => ("ok", GREEN),
+        "minor" => ("degraded", YELLOW),
+        "major" => ("outage", RED),
+        "critical" => ("critical", RED),
+        _ => ("unknown", YELLOW),
     }
+}
+
+/// Render the `api-status` widget, or `None` for any other name.
+/// Unlike most widgets this never renders empty — see [`ApiHealth`].
+pub fn render(name: &str) -> Option<String> {
+    if name != "api-status" {
+        return None;
+    }
+    Some(render_api_health(&io::get_api_status()))
 }
 
 #[cfg(test)]
@@ -238,5 +193,47 @@ mod tests {
     fn legacy_plain_text_cache_is_ignored() {
         // v1.1.0 wrote the bare indicator string to this file.
         assert!(serde_json::from_str::<CacheRecord>("none").is_err());
+    }
+
+    #[test]
+    fn api_health_renders_each_indicator() {
+        let cases = [
+            ("none", "ok", GREEN),
+            ("minor", "degraded", YELLOW),
+            ("major", "outage", RED),
+            ("critical", "critical", RED),
+            ("something-new", "unknown", YELLOW),
+        ];
+        for (indicator, text, color) in cases {
+            let out =
+                render_api_health(&ApiHealth::Current(indicator.to_string()));
+            assert!(out.contains(text), "{indicator} -> {out}");
+            assert!(out.contains(color), "{indicator} -> {out}");
+        }
+    }
+
+    /// The outage bug: an unreachable status page used to hide the
+    /// widget entirely, which reads as "no problem" rather than
+    /// "no answer".
+    #[test]
+    fn api_health_unknown_still_renders() {
+        let out = render_api_health(&ApiHealth::Unknown);
+        assert!(out.contains("api"));
+        assert!(out.contains("unknown"));
+        assert!(out.contains(YELLOW));
+    }
+
+    #[test]
+    fn api_health_stale_is_marked() {
+        let out = render_api_health(&ApiHealth::Stale("major".to_string()));
+        assert!(out.contains("outage~"));
+        assert!(out.contains(RED));
+    }
+
+    /// Guards the dispatch chain: a foreign name must be declined
+    /// *before* any network call is attempted.
+    #[test]
+    fn foreign_widget_name_is_declined() {
+        assert_eq!(render("model"), None);
     }
 }
