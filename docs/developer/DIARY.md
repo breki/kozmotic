@@ -10,6 +10,28 @@ small tweaks don't need entries.
 
 ### 2026-08-14
 
+- Release reach: ARM Linux in, musl out
+
+    Added an `aarch64-unknown-linux-gnu` artifact on
+    GitHub's ARM runner and pinned the Linux builds to
+    `ubuntu-22.04`, since the build runner's glibc is
+    the minimum glibc of every machine that can run
+    the artifact (2.39 → 2.35).
+
+    A static `x86_64-unknown-linux-musl` build was
+    attempted and abandoned: `alsa-sys` needs a musl
+    build of alsa-lib, which no distribution ships, so
+    the build fails at its custom build script even
+    with `musl-tools` present. Making it work would
+    mean cross-compiling alsa-lib or feature-gating
+    `rodio` out of the binary — and the result would
+    still need `libasound` at runtime, defeating the
+    point of static linking. Note that ALSA is a hard
+    runtime dependency of the whole binary, not just
+    `agent-ping`: without `libasound.so.2` even
+    `status-line` fails to start. That is now
+    documented in the README.
+
 - Host widgets and an api-status that never hides
 
     Added `host`, `ram`, and `disk` status-line

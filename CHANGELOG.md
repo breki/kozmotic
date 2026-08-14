@@ -10,6 +10,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Release builds for `aarch64-unknown-linux-gnu`, so
+  ARM Linux machines (Raspberry Pi, Ampere/Graviton
+  VMs) get a prebuilt binary instead of having to
+  build from source.
+- README documents the prebuilt platforms and their
+  runtime requirements: the ALSA shared library on
+  Linux, the minimum glibc, and clearing the macOS
+  Gatekeeper quarantine attribute.
+
+### Changed
+
+- Linux release binaries are now built on
+  `ubuntu-22.04` instead of `ubuntu-latest`. The
+  runner's glibc becomes the minimum glibc of every
+  machine that can run the artifact, so pinning drops
+  the floor from 2.39 to 2.35 (Ubuntu 22.04+,
+  Debian 12+, RHEL 9+).
+
 ## [1.2.0] - 2026-08-14
 
 ### Added

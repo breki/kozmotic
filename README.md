@@ -28,13 +28,40 @@ are used within the project's own development workflow.
 
 ### Quick install (from GitHub Releases)
 
-Download the latest binary for your platform from
+No Rust toolchain is needed on the target machine —
+releases ship prebuilt binaries. Download the archive for
+your platform from
 [GitHub Releases](https://github.com/breki/kozmotic/releases),
-then install it to `~/.claude/bin/`:
+extract it, then install it to `~/.claude/bin/`:
 
 ```bash
 ./kozmotic self install
 ```
+
+#### Prebuilt platforms
+
+| Archive target | Runs on |
+|----------------|---------|
+| `x86_64-unknown-linux-gnu` | 64-bit Intel/AMD Linux, glibc 2.35+ |
+| `aarch64-unknown-linux-gnu` | 64-bit ARM Linux, glibc 2.35+ |
+| `x86_64-pc-windows-msvc` | Windows 10/11, 64-bit |
+| `aarch64-apple-darwin` | macOS on Apple silicon |
+| `x86_64-apple-darwin` | macOS on Intel |
+
+#### Runtime requirements
+
+- **Linux: ALSA must be installed.** The binary links
+  `libasound.so.2` for `agent-ping`, and a missing
+  library stops it from starting *at all* — including
+  `status-line`. Install `libasound2` (Debian/Ubuntu) or
+  `alsa-lib` (Fedora/Arch). Desktop installs already
+  have it; minimal server images often do not.
+- **Linux: glibc 2.35 or newer** (Ubuntu 22.04+,
+  Debian 12+, RHEL 9+). Older distributions need a build
+  from source.
+- **macOS: the binaries are not signed or notarized.**
+  Gatekeeper quarantines them on first run; clear it
+  with `xattr -d com.apple.quarantine kozmotic`.
 
 This copies the binary to `~/.claude/bin/kozmotic` so
 Claude Code hooks can reference it directly:
