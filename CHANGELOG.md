@@ -24,6 +24,12 @@ and this project adheres to
   falls back to the current project's most recent
   session. `--session`, `--project`, `--limit`, and
   `--no-commands` narrow the result.
+- Reviewer agents: `/commit` now spawns two read-only
+  subagents in parallel over the staged diff before
+  committing — `red-team` (security and correctness) and
+  `artisan` (code quality beyond clippy). Deferred findings
+  are logged in `docs/developer/redteam-log.md` and
+  `docs/developer/artisan-log.md`.
 
 ## [1.3.0] - 2026-08-16
 
