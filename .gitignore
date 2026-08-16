@@ -20,6 +20,16 @@ Thumbs.db
 .env
 .env.*
 
+# Agent VM: per-developer settings. Pushed to the VM host with the
+# rest of vagrant/, but never committed -- one developer's git
+# identity would otherwise author everyone else's VM commits.
+# vagrant/local.env.sample is the committed template.
+vagrant/local.env
+
+# Agent VM: per-developer bombyx overrides (a different VM host
+# for this one repo, say). bombyx.toml itself IS committed.
+bombyx.local.toml
+
 # Coverage
 coverage.xml
 coverage.json

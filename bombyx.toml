@@ -1,0 +1,28 @@
+# bombyx project configuration -- see bombyx.toml.sample in the
+# bombyx repo for the full field documentation.
+#
+# There is deliberately no `host` key here, and bombyx refuses
+# one. A project is shared; a VM host is not -- every developer
+# has their own hardware on their own network, so a committed
+# host is wrong for everyone who clones after the person who
+# wrote it. Name yours once, outside any repo:
+#
+#   Linux/macOS  ~/.config/bombyx/config.toml
+#   Windows      %APPDATA%\bombyx\config.toml
+#
+#   host = "my-vmhost"
+#
+# For a one-off, use `--host` or `BOMBYX_HOST`; for this project
+# only, a gitignored `bombyx.local.toml` beside this file.
+
+# Project name. Doubles as the VM's directory name on the host:
+# ~/vms/kozmotic.
+project = "kozmotic"
+
+# Directory in this repo holding the Vagrantfile and provisioning
+# script. Pushed to the host on every `up`, which is what keeps
+# the repo the source of truth for how the VM is built.
+vagrant_dir = "vagrant"
+
+# Root on the VM host under which project directories are created.
+remote_root = "~/vms"

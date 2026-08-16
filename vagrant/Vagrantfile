@@ -1,0 +1,170 @@
+# Agent VM for kozmotic, booted on the libvirt host by bombyx.
+#
+# Sized deliberately small. Rust linking is the memory-hungry
+# step, so raise MEMORY_MB before anything else if builds start
+# getting OOM-killed. The three numbers below are the only knobs
+# most changes need.
+
+VCPUS         = 2
+MEMORY_MB     = 4096
+DISK_GB       = 30      # box default is ~10 GB, too small for a
+                        # Rust target dir plus two cargo-installed
+                        # tools and a coverage run
+
+# Silence one specific, harmless warning that vagrant-libvirt
+# prints before every command:
+#
+#   [fog][WARNING] Unrecognized arguments: libvirt_ip_command
+#
+# vagrant-libvirt 0.12.2 passes `libvirt_ip_command:` to
+# fog-libvirt (driver.rb:42), and fog-libvirt 0.15.0 no longer
+# accepts it, so fog-core reports the unrecognized argument. The
+# option is inert and nothing is skipped -- but the line sits at
+# the top of otherwise successful output, which is where a reader
+# looks for the cause of a problem.
+#
+# fog-core's logger writes each severity to a replaceable channel
+# and skips the write entirely when the channel is falsy, so a
+# channel that drops this one message and forwards everything
+# else removes the noise without hiding genuine fog warnings.
+# Blanking the channel outright (`Fog::Logger[:warning] = nil`)
+# would be shorter and would also hide the next real warning, so
+# it is deliberately not done here.
+#
+# Remove this block once vagrant-libvirt stops passing the
+# option; the filter then simply never matches.
+begin
+  require "fog/core"
+
+  class FogNoiseFilter
+    def initialize(io, pattern)
+      @io = io
+      @pattern = pattern
+    end
+
+    # fog-core asks the channel this before formatting.
+    def tty?
+      @io.tty?
+    end
+
+    def write(message)
+      @io.write(message) unless message.include?(@pattern)
+    end
+  end
+
+  Fog::Logger[:warning] =
+    FogNoiseFilter.new($stderr, "libvirt_ip_command")
+rescue LoadError
+  # fog is not present in every context that loads this file
+  # (`vagrant --version`, for one). Nothing to silence.
+end
+
+# Per-developer settings, read from vagrant/local.env if it is
+# there. That file is gitignored: values that differ per person do
+# not belong in a committed file, or one developer's identity ends
+# up on everyone else's commits.
+#
+# Absent is a supported state. Provisioning then skips the parts
+# that need these values and says so, rather than failing.
+def read_local_env(path)
+  return {} unless File.exist?(path)
+
+  File.readlines(path).each_with_object({}) do |line, env|
+    stripped = line.strip
+    next if stripped.empty? || stripped.start_with?("#")
+
+    key, separator, value = stripped.partition("=")
+    next if separator.empty? || key.strip.empty?
+
+    env[key.strip] = value.strip
+  end
+end
+
+LOCAL_ENV = read_local_env(File.join(File.dirname(__FILE__), "local.env"))
+
+Vagrant.configure("2") do |config|
+  # Debian stable cloud image: a qcow2 built for libvirt, so there
+  # is no VirtualBox-to-libvirt conversion step and the image
+  # stays small.
+  #
+  # kozmotic targets Windows, Linux and macOS, so no distribution
+  # matches production the way Debian matches jutro's Raspberry
+  # Pi. Debian is chosen here simply because it is small and the
+  # cloud image is well maintained. Drop to
+  # "cloud-image/debian-12" if 13 has no libvirt build yet.
+  config.vm.box = "cloud-image/debian-13"
+  config.vm.hostname = "kozmotic-agent"
+
+  # No synced folder, on purpose.
+  #
+  # vagrant-libvirt's default /vagrant share needs NFS exports on
+  # the host, and more importantly a synced folder is a writable
+  # path from the VM back into the host filesystem -- exactly the
+  # hole this VM exists to close. The agent clones the repo inside
+  # the VM instead; see provision.sh.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # No network stanza, and that is a gap rather than a decision.
+  #
+  # The guest lands on vagrant-libvirt's default management
+  # network: a NAT'd bridge on which the libvirt host itself is
+  # the gateway, and every other agent VM on that host is a direct
+  # neighbour. The threat model here assumes the guest may be
+  # hostile, so from its point of view the machine that controls
+  # it -- and its sibling VMs -- are one hop away.
+  #
+  # Closing it properly means an isolated libvirt network with an
+  # egress allowlist enforced at the router. Until then the
+  # containment this VM provides is against reaching the
+  # *workstation's* credentials, not against reaching the VM host.
+  # `scripts/agent-vm-firewall.sh` in the bombyx repo closes the
+  # guest-to-LAN and guest-to-host paths on the host side, which
+  # is most of the exposure.
+  config.vm.provider :libvirt do |libvirt|
+    libvirt.driver = "kvm"
+    libvirt.cpus   = VCPUS
+    libvirt.memory = MEMORY_MB
+
+    # Grows the box's disk. The cloud image expands its root
+    # partition on first boot, so nothing has to be resized by
+    # hand inside the guest.
+    libvirt.machine_virtual_size = DISK_GB
+
+    # Exposes the host CPU's own feature set to the guest. Costs
+    # nothing and is a large win for compile times.
+    libvirt.cpu_mode = "host-passthrough"
+  end
+
+  # Optional deploy key, for pushing.
+  #
+  # kozmotic is a public repository, so unlike jutro's VM this one
+  # needs no credential to clone -- provision.sh falls back to an
+  # HTTPS clone and the VM is fully usable for reading, building
+  # and testing without any key at all. What a key buys is the
+  # ability to push from inside the VM.
+  #
+  # The key lives on the VM host, outside any repository, and is
+  # read from there. It must never be placed under vagrant/:
+  # bombyx pushes that whole directory, so a key kept here would
+  # be committed to the repo it grants access to.
+  #
+  # Uploaded into ~/.ssh with whatever permissions the file
+  # provisioner gives it; provision.sh tightens it to 0600, which
+  # ssh requires.
+  kozmotic_deploy_key = File.expand_path("~/.secrets/kozmotic-deploy-key")
+  if File.exist?(kozmotic_deploy_key)
+    config.vm.provision "file",
+      source: kozmotic_deploy_key,
+      destination: "/home/vagrant/.ssh/kozmotic-deploy-key"
+  end
+
+  # privileged: false runs the script as the `vagrant` user, so
+  # rustup, the cargo-installed tools and Claude Code land in that
+  # user's home rather than root's -- the account the agent
+  # actually works as, and the reason nothing here is installed by
+  # a root-run script.
+  config.vm.provision "shell",
+    path: "provision.sh",
+    privileged: false,
+    env: LOCAL_ENV
+end
