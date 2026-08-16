@@ -8,7 +8,7 @@ repo = "https://github.com/breki/rustbase"
 created-from = "076cf4480dd763797799095ad5e97af900291cfb"
 
 # Commit SHA last synced to.
-last-synced = "076cf4480dd763797799095ad5e97af900291cfb"
+last-synced = "f40582fc18f58ad251cea7a44630569192e05e62"
 
 # Human-readable version at last sync.
-last-synced-version = "0.4.0"
+last-synced-version = "0.17.0"

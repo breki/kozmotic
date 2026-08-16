@@ -24,5 +24,64 @@ float_cmp = "allow"
 struct_field_names = "allow"
 too_many_lines = "allow"
 
+# Extra paths to exclude from the coverage gate, merged with
+# `cargo xtask coverage`'s baseline (which already ignores
+# src/main.rs and src/bin/). Each entry is a regex fragment
+# passed to `cargo llvm-cov --ignore-filename-regex`. Use this
+# for hardware-bound leaf modules that can't run under llvm-cov
+# in CI (see CLAUDE.md "Coverage exceptions for hardware-bound
+# code"). Use single-quoted TOML literal strings so backslashes
+# reach the regex verbatim.
+[workspace.metadata.coverage]
+ignore = [
+    # Hardware-bound: needs a real audio output device.
+    'agent_ping[/\\]playback\.rs$',
+    # Network-bound: fetches status.claude.com. Only the I/O
+    # half is excluded; the cache and rendering logic in
+    # api_status.rs is measured like everything else.
+    'status_line[/\\]api_status[/\\]io\.rs$',
+]
+
 [profile.test]
 opt-level = 1
+
+# `[profile.release]` is intentionally left at cargo
+# defaults. Shipped binaries (release archives,
+# `cargo install`, CI artifacts) must use the fully-optimised
+# profile, and silently inheriting `incremental = true`
+# / `codegen-units = 256` for release builds slows
+# every downstream binary for no iteration-speed gain.
+#
+# For fast local iteration when you genuinely want a
+# release-shaped build but optimised for compile time
+# (e.g. profiling a debug-noisy workload), use the
+# `release-fast` profile below:
+#
+#   cargo build --profile release-fast
+#
+# Tradeoffs you accept by selecting `release-fast`:
+# - `incremental = true` -- the cargo book documents
+#   that incremental compilation can degrade
+#   optimisation quality.
+#   <https://doc.rust-lang.org/cargo/reference/profiles.html#incremental>
+# - `codegen-units = 256` (vs default 16) splits the
+#   crate into many small units, which limits LLVM's
+#   cross-unit inlining and other interprocedural
+#   optimisations. Empirical runtime cost in one
+#   rustbase-derived webapp (Ledgerstone) was <5%, but
+#   workloads vary -- benchmark before relying on the
+#   number.
+#
+# Never use `release-fast` for shipped binaries.
+# Profile shape is pinned (rather than only overriding
+# the iteration-speed knobs) so the <5% empirical
+# overhead figure above remains comparable across cargo
+# versions if `[profile.release]` defaults shift in the
+# future.
+[profile.release-fast]
+inherits = "release"
+incremental = true
+codegen-units = 256
+lto = false
+debug = false
+strip = "none"

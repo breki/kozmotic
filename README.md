@@ -359,12 +359,24 @@ cargo xtask clippy      # lints only
 cargo xtask fmt         # format the code
 cargo xtask validate    # fmt + clippy + tests + coverage
 cargo xtask coverage    # coverage only (>= 90%)
+cargo xtask dupes       # duplication check (<= 6%)
+cargo xtask changelog   # add a CHANGELOG entry
+cargo xtask todo        # list/add/done TODO items
 ```
 
 `cargo xtask validate` is the acceptance gate: formatting,
 `-D warnings` clippy, the full test suite, and a 90% line
 coverage floor (85% per module). On Windows, `.\build.ps1
 validate` wraps the same pipeline.
+
+Hardware- and network-bound leaf modules are exempt from the
+coverage gate via `[workspace.metadata.coverage]` in the root
+`Cargo.toml`; see CLAUDE.md for the recipe.
+
+Commits go through `/commit`, which spawns two read-only
+reviewer agents in parallel over the staged diff -- `red-team`
+(security and correctness) and `artisan` (code quality) --
+before anything is committed.
 
 ## Contributing
 

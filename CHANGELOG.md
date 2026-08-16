@@ -30,6 +30,43 @@ and this project adheres to
   `artisan` (code quality beyond clippy). Deferred findings
   are logged in `docs/developer/redteam-log.md` and
   `docs/developer/artisan-log.md`.
+- `cargo xtask changelog add` and `cargo xtask todo`
+  (`list`/`add`/`done`) make the mechanical `CHANGELOG.md`
+  and `TODO.md` edits, which are easy to get wrong by hand
+  when the sections sit far apart.
+- `clippy.toml` carries a `doc-valid-idents` allowlist, so
+  terms like `JSON`, `macOS`, and `PowerShell` no longer
+  need backticking in every doc comment.
+- `release-fast` cargo profile for release-shaped builds
+  optimised for compile time. Never use it for shipped
+  binaries.
+
+### Changed
+
+- Coverage exclusions moved from a hardcoded regex in
+  `xtask` to `[workspace.metadata.coverage]` in the root
+  `Cargo.toml`, so exempting a hardware-bound module no
+  longer means editing the build tooling. Coverage output is
+  unchanged (97.2%), and a failing module now reports its
+  uncovered line ranges.
+- The Stop hook runs a fast subset — `cargo fmt --check`,
+  clippy, tests — instead of full `validate`, and labels
+  which stage failed. Coverage and duplication are skipped
+  there; `/commit` still runs the full gate.
+- `TODO.md` gained a `## Pending` section and lost a stray
+  `/#` on its title line, so `cargo xtask todo` can drive it.
+- Synced the rustbase template from 0.4.0 to 0.17.0. CI/CD
+  workflows, the supply-chain gates, and the frontend and
+  deployment scaffolding were deliberately not taken.
+
+### Fixed
+
+- The Stop hook now actually runs. Its re-entry guard grepped for the
+  stop_hook_active key rather than its value, and the payload always contains
+  the key, so the hook exited early every time
+- The coverage gate now fails when it measures nothing, whatever the ignore
+  pattern. The previous guard only rejected four literal spellings, so a
+  near-miss like 'src' silently reduced the gate to a vacuous pass
 
 ## [1.3.0] - 2026-08-16
 

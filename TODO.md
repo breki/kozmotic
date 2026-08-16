@@ -1,4 +1,21 @@
-/# TODO
+# TODO
+
+Project work queue.
+
+- `/todo <text>` captures a new item with a generated slug.
+- `/todo` (no arguments) lists pending slugs.
+
+Edit this file through `cargo xtask todo` (`list`, `add`,
+`done`) rather than by hand -- the sections sit far apart and
+a hand edit easily splits one with a duplicate heading.
+
+## Pending
+
+<!-- Items captured by /todo land here. -->
+
+- **template-sync-remainder** -- Sync remaining rustbase items: validate.rs
+  ergonomics, supply-chain gates (audit, dep-age, clean-cache), and the
+  /implement and /retrospect skills
 
 ## Done
 

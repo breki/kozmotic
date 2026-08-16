@@ -31,6 +31,8 @@ cargo xtask fmt               # format code
 cargo xtask check             # fast compile check
 cargo xtask coverage          # coverage check (>=90%)
 cargo xtask dupes             # code duplication check (<=6%)
+cargo xtask changelog add     # add a CHANGELOG entry
+cargo xtask todo list|add|done # manage TODO.md items
 ```
 
 PowerShell entry: `.\build.ps1 <command>` (validate,
