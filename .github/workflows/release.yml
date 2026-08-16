@@ -119,22 +119,39 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # Notes come from the dated CHANGELOG section for this exact
+      # version, and from nothing else.
+      #
+      # The previous version of this accepted `[Unreleased]` as a
+      # fallback, which looks like a convenience and is a trap:
+      # `[Unreleased]` is the first `## [` heading in the file, so
+      # it matched before the version's own section was ever
+      # reached -- and a release has just emptied it. v1.2.0
+      # shipped with empty notes for exactly this reason, and
+      # nothing failed to say so.
+      #
+      # Matching the version heading by exact prefix, and failing
+      # when it is absent, is what keeps that mistake loud.
       - name: Extract release notes from CHANGELOG
         id: notes
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          # Extract the section for this version (or Unreleased)
-          NOTES=$(awk -v ver="$VERSION" '
+          awk -v prefix="## [${VERSION}]" '
             /^## \[/ {
               if (found) exit
-              if ($0 ~ "\\[" ver "\\]" || $0 ~ "\\[Unreleased\\]") found=1
+              found = (substr($0, 1, length(prefix)) == prefix)
               next
             }
             found { print }
-          ' CHANGELOG.md)
-          # Write to file to preserve newlines
-          echo "$NOTES" > release_notes.md
+          ' CHANGELOG.md > release_notes.md
+
+          if [ ! -s release_notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for [${VERSION}]." \
+                 "Promote [Unreleased] to a dated section before tagging."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         env:
