@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-16
+
 ### Added
 
 - `status-line` can right-align part of a line. A `~` in
