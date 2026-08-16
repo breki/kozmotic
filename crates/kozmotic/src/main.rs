@@ -40,13 +40,19 @@ enum Commands {
     /// Format Claude Code session data for the status line
     #[command(name = "status-line")]
     StatusLine {
-        /// Widgets to show (comma-separated)
+        /// Widgets to show (comma-separated; ";" splits lines,
+        /// "~" right-aligns the rest of a line)
         #[arg(long, default_value = "model,context,cost")]
         show: String,
 
         /// Separator between widgets
         #[arg(long, default_value = " | ")]
         separator: String,
+
+        /// Columns to right-align against (default: COLUMNS,
+        /// else the terminal width, else 80)
+        #[arg(long)]
+        width: Option<usize>,
     },
     /// Play a notification sound (for hooks and alerts)
     #[command(name = "agent-ping")]
@@ -126,9 +132,15 @@ fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        Some(Commands::StatusLine { show, separator }) => {
-            handle_status_line(&StatusLineArgs { show, separator })
-        }
+        Some(Commands::StatusLine {
+            show,
+            separator,
+            width,
+        }) => handle_status_line(&StatusLineArgs {
+            show,
+            separator,
+            width,
+        }),
         Some(Commands::Self_(SelfCommands::Install(args))) => {
             handle_self_install(&cli.format, args.target_dir)
         }

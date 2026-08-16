@@ -99,6 +99,18 @@ status-line` for the Claude Code status bar.
      reports the filesystem holding the session's
      working directory.
 
+   Layout syntax for the `--show` value:
+   - `,` separates widgets.
+   - `;` starts a new status-bar line.
+   - `~` pushes the widgets after it to the right
+     edge of that line, e.g.
+     `git-branch,git-files~cost,rate-limit`.
+
+   Right-alignment needs a width. It resolves from
+   `--width`, then `COLUMNS`, then the terminal, then
+   80 — add `--width N` to the command only if the
+   user reports the alignment looking wrong.
+
 3. **Ask about separator** using AskUserQuestion:
 
    Ask: "What separator between widgets?"

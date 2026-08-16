@@ -11,11 +11,13 @@ use std::process::ExitCode;
 mod api_status;
 mod format;
 mod git;
+mod layout;
 mod session;
 mod system;
 mod theme;
 
 use git::GitContext;
+use layout::LineSpec;
 use session::SessionData;
 use system::SystemContext;
 use theme::{RED, RESET};
@@ -23,6 +25,9 @@ use theme::{RED, RESET};
 pub struct StatusLineArgs {
     pub show: String,
     pub separator: String,
+    /// Column count to right-align against. `None` resolves from the
+    /// environment — see [`layout::resolve_width`].
+    pub width: Option<usize>,
 }
 
 pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
@@ -44,17 +49,25 @@ pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
 
     let git = GitContext::default();
     let sys = SystemContext::new(data.working_dir());
+    // Resolved once: probing the terminal per line would be wasteful
+    // and could report different widths mid-render.
+    let width = layout::resolve_width(args.width);
+
     // Support multi-line: split on ";" to get lines
-    let lines: Vec<&str> = args.show.split(';').collect();
-    for line_spec in &lines {
-        let widgets: Vec<&str> = line_spec.split(',').map(str::trim).collect();
-        let parts: Vec<String> = widgets
-            .iter()
-            .filter_map(|w| render_widget(w, &data, &git, &sys))
-            .collect();
-        if !parts.is_empty() {
-            println!("{}", parts.join(&args.separator));
+    for line_spec in args.show.split(';') {
+        let spec = LineSpec::parse(line_spec);
+        let render = |names: &[&str]| -> Vec<String> {
+            names
+                .iter()
+                .filter_map(|w| render_widget(w, &data, &git, &sys))
+                .collect()
+        };
+        let left = render(&spec.left);
+        let right = render(&spec.right);
+        if left.is_empty() && right.is_empty() {
+            continue;
         }
+        println!("{}", layout::compose(&left, &right, &args.separator, width));
     }
 
     ExitCode::SUCCESS

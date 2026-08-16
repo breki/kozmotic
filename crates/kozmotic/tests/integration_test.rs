@@ -431,6 +431,107 @@ fn test_status_line_api_status() {
         );
 }
 
+/// Visible columns of a rendered line: ANSI escapes occupy none.
+/// A CSI sequence is `ESC [` then parameters then a final byte in
+/// 0x40..=0x7E — the `[` is in that range too, so skip it first.
+fn visible_width(line: &str) -> usize {
+    let mut count = 0;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            count += 1;
+            continue;
+        }
+        if chars.peek() == Some(&'[') {
+            chars.next();
+            for e in chars.by_ref() {
+                if ('\x40'..='\x7e').contains(&e) {
+                    break;
+                }
+            }
+        } else {
+            chars.next();
+        }
+    }
+    count
+}
+
+#[test]
+fn test_status_line_right_align_pads_to_width() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    let out = cmd
+        .arg("status-line")
+        .arg("--show")
+        .arg("model~cost")
+        .arg("--width")
+        .arg("60")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).expect("utf8");
+    let line = text.lines().next().expect("one line");
+    assert_eq!(visible_width(line), 60, "line was {line:?}");
+    assert!(line.starts_with("Opus 4.6"));
+    assert!(line.trim_end().ends_with("$1.23"));
+}
+
+#[test]
+fn test_status_line_right_align_multiline() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    let out = cmd
+        .arg("status-line")
+        .arg("--show")
+        .arg("model~cost;context~lines")
+        .arg("--width")
+        .arg("50")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).expect("utf8");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 2);
+    for line in lines {
+        assert_eq!(visible_width(line), 50, "line was {line:?}");
+    }
+}
+
+#[test]
+fn test_status_line_without_marker_is_unpadded() {
+    // Absent a "~", output must be exactly as before the feature.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("model,cost")
+        .arg("--width")
+        .arg("60")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opus 4.6 | "))
+        .stdout(predicate::str::contains("   ").not());
+}
+
+#[test]
+fn test_status_line_right_align_overflow_does_not_truncate() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("model~cost")
+        .arg("--width")
+        .arg("5")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opus 4.6"))
+        .stdout(predicate::str::contains("$1.23"));
+}
+
 #[test]
 fn test_status_line_host() {
     let mut cmd = cargo_bin_cmd!("kozmotic");
