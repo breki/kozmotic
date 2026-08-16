@@ -9,6 +9,52 @@ Newest entries first.
 
 ---
 
+## 2026-08-16
+
+- **`.claude/hooks/stop-check.sh` never runs: its
+  re-entry guard matches the key, not the value.** The
+  guard is
+  `if echo "$input" | grep -q '"stop_hook_active"'`,
+  but Claude Code's Stop payload *always* contains that
+  key — `false` on the first invocation and `true` only
+  on re-entry. The grep therefore succeeds every time
+  and the hook exits 0 before running a single check.
+  Verified against the shipped script — with modified
+  `.rs` files and a broken tree, this exits 0:
+
+  ```bash
+  echo '{"hook_event_name":"Stop","stop_hook_active":false}' \
+    | .claude/hooks/stop-check.sh
+  ```
+
+  This has presumably been silent in every
+  derived project since the guard was written — the
+  hook appears configured and does nothing, so
+  developers believe fmt/clippy/tests are gated
+  interactively when they are not. It also makes
+  commit e266c78's investment in the staged `run_stage`
+  rework unreachable, and the rationale comment about
+  fmt drift slipping into CI describes a guard that
+  never engages. **Suggested fix:** match the value —
+  `grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true'`
+  — or parse it with `jq -e '.stop_hook_active == true'`.
+  Worth adding a regression check that the hook exits 2
+  for a `false` payload against a dirty tree, since the
+  failure mode is silence and nothing else would catch
+  a recurrence.
+
+- **`cargo xtask changelog add` rejects entry text that
+  begins with `--`.** clap parses the leading dashes as
+  a flag, so
+  `cargo xtask changelog add --kind changed "--format is now a ValueEnum"`
+  fails with a usage error. `--` before the text works
+  around it, but the argument is a free-text entry and
+  users writing about CLI flags will hit this
+  constantly. **Suggested fix:** mark the positional
+  with `allow_hyphen_values = true`.
+
+---
+
 ## 2026-08-03
 
 - **`xtask/src/validate.rs` ships a trailing comma that

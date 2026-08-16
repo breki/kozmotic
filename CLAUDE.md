@@ -110,6 +110,18 @@ two do not drift.
 
 ## Collaboration
 
+- **Keep responses focused, brief, and concise.** Keep
+  disclaimers and caveats short, and spend most of the
+  response on the main answer. When asked to explain
+  something, give a high-level summary unless an in-depth
+  explanation is specifically requested. Use headings,
+  tables, and bold only when the content is genuinely a
+  list or a comparison; prose does not need scaffolding.
+- **Match the length of written documents to what the task
+  needs.** Cover the substance, but do not pad with filler
+  sections, redundant summaries, or boilerplate. This
+  applies to files written to disk -- reports, Markdown
+  documents, summaries -- as well as to replies.
 - **Write plainly.** One idea per sentence; lead with the
   concrete example, then the rule; prefer plain words
   ("reminder" over "forcing function", "try again" over
@@ -421,3 +433,18 @@ When you notice anything in the template-provided
 files that is suboptimal, incorrect, outdated, or
 could be improved, log it in
 `docs/developer/template-feedback.md`.
+
+## Tone reminder
+
+Repeated at the end deliberately: in a long prompt, a
+conciseness instruction near the top fades. Claude Opus 5
+defaults to longer responses, more progress narration, and
+longer written deliverables than earlier models. Anthropic's
+Opus 5 prompting guide notes that lowering `effort` reduces
+thinking but not visible output, so length has to be asked
+for explicitly.
+
+<tone_preference>
+Keep outputs reasonably concise. Lead with the answer.
+Structure only what is actually a list.
+</tone_preference>
