@@ -24,8 +24,22 @@ struct StatusPageStatus {
     indicator: String,
 }
 
-fn status_cache_path() -> PathBuf {
-    std::env::temp_dir().join(STATUS_CACHE_FILE)
+/// Where the cached indicator lives, or `None` when there is no home
+/// directory to put it in.
+///
+/// Under `~/.claude/` rather than the system temp directory: a fixed
+/// name in a world-writable directory lets any other user on the host
+/// pre-create the file, after which our writes fail silently and every
+/// render pays the full `GLOBAL_TIMEOUT` — defeating the retry
+/// cooldown this cache exists to provide — or we serve an
+/// attacker-chosen indicator during a real outage. With no home
+/// directory we simply do not cache, which is slower but never wrong.
+fn status_cache_path() -> Option<PathBuf> {
+    Some(
+        crate::self_install::home_dir()?
+            .join(".claude")
+            .join(STATUS_CACHE_FILE),
+    )
 }
 
 fn now_secs() -> u64 {
@@ -35,13 +49,32 @@ fn now_secs() -> u64 {
 }
 
 fn read_cache() -> Option<CacheRecord> {
-    let raw = std::fs::read_to_string(status_cache_path()).ok()?;
+    let raw = std::fs::read_to_string(status_cache_path()?).ok()?;
     serde_json::from_str(&raw).ok()
 }
 
+/// Write the cache atomically.
+///
+/// A bare `fs::write` truncates before writing, so a concurrent
+/// render — Claude Code re-renders the status line every turn — can
+/// read a half-written file, parse nothing, and go to the network.
+/// Writing to a pid-qualified temp file and renaming makes the
+/// swap atomic for readers.
 fn write_cache(record: &CacheRecord) {
-    if let Ok(raw) = serde_json::to_string(record) {
-        let _ = std::fs::write(status_cache_path(), raw);
+    let Ok(raw) = serde_json::to_string(record) else {
+        return;
+    };
+    let Some(path) = status_cache_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
+    if std::fs::write(&tmp, raw).is_ok()
+        && std::fs::rename(&tmp, &path).is_err()
+    {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 

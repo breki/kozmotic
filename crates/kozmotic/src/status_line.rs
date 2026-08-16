@@ -15,39 +15,78 @@ mod layout;
 mod session;
 mod system;
 mod theme;
+mod widget;
 
+use crate::output::{CliError, OutputFormat, Tool, emit_error};
 use git::GitContext;
 use layout::LineSpec;
 use session::SessionData;
 use system::SystemContext;
 use theme::{RED, RESET};
+use widget::Widget;
 
+/// Derives `clap::Args` directly -- see the note on
+/// [`crate::sessions::PromptsArgs`].
+#[derive(clap::Args)]
 pub struct StatusLineArgs {
+    /// Widgets to show (comma-separated; ";" splits lines,
+    /// "~" right-aligns the rest of a line)
+    #[arg(long, default_value = "model,context,cost")]
     pub show: String,
+
+    /// Separator between widgets
+    #[arg(long, default_value = " | ")]
     pub separator: String,
-    /// Column count to right-align against. `None` resolves from the
-    /// environment — see [`layout::resolve_width`].
+
+    /// Columns to right-align against. Defaults to `COLUMNS`, else
+    /// the terminal width, else 80 — see [`layout::resolve_width`].
+    #[arg(long)]
     pub width: Option<usize>,
 }
 
-pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
+/// Why the status line could not be rendered.
+///
+/// Typed so a hook can tell "nothing arrived on stdin" from "the
+/// payload was malformed" by `code`, instead of matching on prose.
+#[derive(Debug, thiserror::Error)]
+pub enum StatusLineError {
+    #[error("no input on stdin")]
+    NoInput,
+    #[error("invalid JSON: {0}")]
+    InvalidJson(String),
+    #[error("{0}")]
+    UnknownWidget(String),
+}
+
+impl CliError for StatusLineError {
+    fn code(&self) -> &'static str {
+        match self {
+            StatusLineError::NoInput => "NO_INPUT",
+            StatusLineError::InvalidJson(_) => "INVALID_JSON",
+            StatusLineError::UnknownWidget(_) => "UNKNOWN_WIDGET",
+        }
+    }
+}
+
+pub fn handle_status_line(
+    format: OutputFormat,
+    args: &StatusLineArgs,
+) -> ExitCode {
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err()
         || input.trim().is_empty()
     {
-        report_error("no input on stdin");
-        return ExitCode::FAILURE;
+        return fail(format, &StatusLineError::NoInput);
     }
 
     let data: SessionData = match serde_json::from_str(&input) {
         Ok(d) => d,
         Err(e) => {
-            report_error(&format!("invalid JSON: {e}"));
-            return ExitCode::FAILURE;
+            return fail(format, &StatusLineError::InvalidJson(e.to_string()));
         }
     };
 
-    let git = GitContext::default();
+    let git = GitContext::new(data.working_dir());
     let sys = SystemContext::new(data.working_dir());
     // Resolved once: probing the terminal per line would be wasteful
     // and could report different widths mid-render.
@@ -55,11 +94,19 @@ pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
 
     // Support multi-line: split on ";" to get lines
     for line_spec in args.show.split(';') {
-        let spec = LineSpec::parse(line_spec);
-        let render = |names: &[&str]| -> Vec<String> {
-            names
+        let spec = match LineSpec::parse(line_spec) {
+            Ok(spec) => spec,
+            Err(e) => {
+                return fail(
+                    format,
+                    &StatusLineError::UnknownWidget(e.to_string()),
+                );
+            }
+        };
+        let render = |widgets: &[Widget]| -> Vec<String> {
+            widgets
                 .iter()
-                .filter_map(|w| render_widget(w, &data, &git, &sys))
+                .filter_map(|w| render_widget(*w, &data, &git, &sys))
                 .collect()
         };
         let left = render(&spec.left);
@@ -73,28 +120,31 @@ pub fn handle_status_line(args: &StatusLineArgs) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Print a diagnostic that's visible in the Claude Code status line
-/// (stdout) and also logged to stderr for terminal invocations. A
-/// silent failure makes the status line disappear entirely, which is
-/// almost always worse than showing what went wrong.
-fn report_error(msg: &str) {
-    eprintln!("Error: {msg}");
-    println!("{RED}status-line: {msg}{RESET}");
+/// Report a failure through the shared envelope *and* leave
+/// something visible in the status bar.
+///
+/// The stdout line is deliberate: a silent failure makes the status
+/// line vanish entirely, which is worse than showing what went wrong.
+/// The stderr envelope is what a hook or script parses, and it now
+/// honours `--format` like every other subcommand.
+fn fail(format: OutputFormat, err: &StatusLineError) -> ExitCode {
+    println!("{RED}status-line: {err}{RESET}");
+    emit_error(format, Tool::StatusLine, err)
 }
 
 /// Ask each widget family in turn. Names are disjoint across
 /// families, so the first `Some` wins and an unknown name falls
 /// through to `None`, which the caller skips.
 fn render_widget(
-    name: &str,
+    widget: Widget,
     data: &SessionData,
     git: &GitContext,
     sys: &SystemContext,
 ) -> Option<String> {
-    session::render(name, data)
-        .or_else(|| git::render(name, git))
-        .or_else(|| system::render(name, sys))
-        .or_else(|| api_status::render(name))
+    session::render(widget, data)
+        .or_else(|| git::render(widget, git))
+        .or_else(|| system::render(widget, sys))
+        .or_else(|| api_status::render(widget))
 }
 
 #[cfg(test)]
@@ -114,16 +164,40 @@ mod tests {
     fn dispatch_reaches_each_family() {
         let (data, git, sys) = contexts();
         // One widget per family that always renders on any machine.
-        for widget in ["cost", "git-files", "ram"] {
+        for widget in [Widget::Cost, Widget::GitFiles, Widget::Ram] {
             let out = render_widget(widget, &data, &git, &sys)
                 .unwrap_or_else(|| panic!("{widget} should render"));
             assert!(!out.is_empty(), "{widget}");
         }
     }
 
+    /// Every declared widget must be owned by exactly one family.
+    ///
+    /// Previously unrepresentable: an unknown name and a widget no
+    /// family claimed both produced `None`, so a variant nobody
+    /// handled was indistinguishable from a typo. Now that `--show`
+    /// only yields real `Widget`s, a variant that renders nothing on
+    /// a default context is a genuine gap.
     #[test]
-    fn unknown_widget_renders_nothing() {
+    fn every_widget_is_claimed_by_a_family() {
         let (data, git, sys) = contexts();
-        assert_eq!(render_widget("nope", &data, &git, &sys), None);
+        let owners = |w: Widget| {
+            [
+                session::render(w, &data).is_some(),
+                git::render(w, &git).is_some(),
+                system::render(w, &sys).is_some(),
+            ]
+            .iter()
+            .filter(|claimed| **claimed)
+            .count()
+        };
+        for widget in Widget::ALL {
+            // `api-status` reaches the network; the rest must be
+            // claimed by at most one local family.
+            if *widget == Widget::ApiStatus {
+                continue;
+            }
+            assert!(owners(*widget) <= 1, "{widget} claimed by two families");
+        }
     }
 }

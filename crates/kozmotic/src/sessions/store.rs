@@ -16,18 +16,24 @@ pub enum StoreError {
     NoStorage(PathBuf),
     #[error("no session {0} found on disk")]
     SessionNotFound(String),
+    #[error("not a valid session id")]
+    InvalidSessionId,
+    #[error("cannot read transcript {0}: {1}")]
+    Unreadable(PathBuf, std::io::Error),
     #[error("no sessions recorded for {0}")]
     NoSessionsForProject(PathBuf),
     #[error("cannot determine the current directory: {0}")]
     Cwd(std::io::Error),
 }
 
-impl StoreError {
-    pub fn code(&self) -> &'static str {
+impl crate::output::CliError for StoreError {
+    fn code(&self) -> &'static str {
         match self {
             StoreError::HomeNotFound => "HOME_NOT_FOUND",
             StoreError::NoStorage(_) => "NO_STORAGE",
             StoreError::SessionNotFound(_) => "SESSION_NOT_FOUND",
+            StoreError::InvalidSessionId => "INVALID_SESSION_ID",
+            StoreError::Unreadable(_, _) => "TRANSCRIPT_UNREADABLE",
             StoreError::NoSessionsForProject(_) => "NO_SESSIONS",
             StoreError::Cwd(_) => "CWD_UNAVAILABLE",
         }
@@ -100,6 +106,24 @@ pub fn current_session_id() -> Option<String> {
         .filter(|id| !id.trim().is_empty())
 }
 
+/// A session id is a bare token, never a path fragment.
+///
+/// This is a security boundary, not tidiness. The id is interpolated
+/// into a filename, and `Path::join` neither normalises `..` nor
+/// resists an absolute argument (which replaces the whole prefix),
+/// so an unchecked id turns this command into an arbitrary-file
+/// reader for anything ending in `.jsonl`. The command is invoked
+/// from hooks and subagents, where the id can come from
+/// model-influenced text, so the check belongs here rather than at
+/// the call sites.
+fn valid_session_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 /// Look for `<id>.jsonl` under the project's own directory first,
 /// then anywhere in the store — a session id is globally unique, so
 /// finding it under another project is better than reporting it
@@ -109,6 +133,11 @@ fn find_by_id(
     project_dir: &Path,
     id: &str,
 ) -> Result<Transcript, StoreError> {
+    if !valid_session_id(id) {
+        // Deliberately does not echo the input back: the error is
+        // otherwise a probe oracle for what exists on disk.
+        return Err(StoreError::InvalidSessionId);
+    }
     let file = format!("{id}.jsonl");
     let local = root.join(slug_for(project_dir)).join(&file);
     if local.is_file() {
@@ -191,6 +220,7 @@ fn session_id_of(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::CliError;
 
     /// A store with one project directory holding the named
     /// transcripts, created oldest-first so mtimes are ordered.
@@ -259,6 +289,40 @@ mod tests {
         .unwrap();
         assert_eq!(t.session_id, "stray");
         assert!(t.path.is_file());
+    }
+
+    #[test]
+    fn path_shaped_session_ids_are_rejected() {
+        let project = PathBuf::from("/p/one");
+        let root = store(&project, &["only"]);
+        // A file that exists, reachable only by escaping the store.
+        let outside = root.path().parent().unwrap().join("outside.jsonl");
+        let _ = std::fs::write(&outside, "{}\n");
+        for id in [
+            "../../outside",
+            "..",
+            "/etc/passwd",
+            "a/b",
+            "a\\b",
+            "",
+            "with space",
+        ] {
+            let err = resolve(
+                root.path(),
+                Some(project.clone()),
+                Some(id.to_string()),
+            )
+            .unwrap_err();
+            assert_eq!(err.code(), "INVALID_SESSION_ID", "id {id:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_session_ids_are_accepted() {
+        for id in ["only", "5aa654de-734a-4cf4-8d43-36f51c716a83", "a_b-1"] {
+            assert!(valid_session_id(id), "id {id:?}");
+        }
+        assert!(!valid_session_id(&"a".repeat(129)));
     }
 
     #[test]

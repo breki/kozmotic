@@ -784,15 +784,33 @@ fn test_status_line_invalid_json() {
 }
 
 #[test]
-fn test_status_line_unknown_widget() {
-    // Unknown widget names render to nothing.
+fn test_status_line_unknown_widget_is_reported() {
+    // Behaviour change: an unknown widget name used to render to
+    // nothing, so `--show contxt` silently produced a shorter line
+    // with no diagnostic anywhere. It is now reported, with the
+    // valid names listed, and the status bar still shows a visible
+    // message rather than collapsing to an empty line.
     let mut cmd = cargo_bin_cmd!("kozmotic");
-    cmd.arg("status-line")
-        .arg("--show")
-        .arg("nonsense-widget")
+    cmd.args(["status-line", "--show", "nonsense-widget"])
         .write_stdin(FULL_STATUS_JSON)
         .assert()
-        .success();
+        .failure()
+        .stderr(predicate::str::contains("UNKNOWN_WIDGET"))
+        .stderr(predicate::str::contains("nonsense-widget"))
+        .stdout(predicate::str::contains("status-line:"));
+}
+
+#[test]
+fn test_status_line_unknown_widget_names_the_alternatives() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.args(["--format", "human", "status-line", "--show", "contxt"])
+        .write_stdin(FULL_STATUS_JSON)
+        .assert()
+        .failure()
+        // The message lists the real widgets, so the typo is
+        // self-correcting.
+        .stderr(predicate::str::contains("context"))
+        .stderr(predicate::str::contains("git-branch"));
 }
 
 #[test]
@@ -892,21 +910,69 @@ fn test_agent_ping_muted_human() {
 }
 
 #[test]
-fn test_agent_ping_muted_with_file() {
-    // Muted path includes "unknown" fallback when no source given
-    // and uses --file source for the muted JSON output.
+fn test_agent_ping_muted_still_validates() {
+    // Regression: the mute check used to short-circuit before
+    // validation, so a bad source exited 0 whenever sounds happened
+    // to be muted -- and only failed later, for someone else, after
+    // an unmute. Hook configs are validated by running them, so
+    // muting must not suppress the diagnosis.
     let home = fake_home_with_mute("ping-mute-file");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .args(["agent-ping", "--file", "nonexistent.wav"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("FILE_NOT_FOUND"));
+
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .args(["agent-ping", "--sound", "Stopp"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("UNKNOWN_PRESET"));
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_agent_ping_muted_reports_the_same_payload_shape() {
+    // Muted output carries the same `sound` + `details` as a real
+    // play, plus `muted`, so a consumer does not see fields appear
+    // and vanish with unrelated user state.
+    let home = fake_home_with_mute("ping-mute-shape");
+    let file = home.join("beep.wav");
+    std::fs::write(&file, b"not really audio").unwrap();
     let mut cmd = cargo_bin_cmd!("kozmotic");
     cmd.env("HOME", &home)
         .env("USERPROFILE", &home)
         .arg("agent-ping")
         .arg("--file")
-        .arg("nonexistent.wav")
+        .arg(file.as_os_str())
         .assert()
         .success()
         .stdout(predicate::str::contains("\"muted\": true"))
-        .stdout(predicate::str::contains("nonexistent.wav"));
+        .stdout(predicate::str::contains("\"played\": false"))
+        .stdout(predicate::str::contains("\"details\""))
+        .stdout(predicate::str::contains("beep.wav"));
     let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn test_agent_ping_rejects_unbounded_timing_args() {
+    // Regression: duration/repeat/interval were unvalidated, so a
+    // hook could hold the audio device for days.
+    for (flag, value, code) in [
+        ("--duration", "999999999", "INVALID_DURATION"),
+        ("--repeat", "4000000000", "INVALID_REPEAT"),
+        ("--interval", "999999999", "INVALID_INTERVAL"),
+    ] {
+        let mut cmd = cargo_bin_cmd!("kozmotic");
+        cmd.args(["agent-ping", "--frequency", "440", flag, value])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(code));
+    }
 }
 
 #[test]
@@ -1331,4 +1397,123 @@ fn test_sessions_prompts_empty_session_reports_none() {
         .assert()
         .success()
         .stdout(predicate::str::contains("No prompts in session blank"));
+}
+
+#[test]
+fn test_sessions_prompts_rejects_path_traversal() {
+    // Regression: `--session` was interpolated straight into a
+    // filename, so `..` segments (and absolute paths) escaped the
+    // store and read any readable *.jsonl on the machine.
+    let store = fixture_store("sess-1");
+    let outside = store.path().join("outside.jsonl");
+    std::fs::write(
+        &outside,
+        r#"{"type":"user","message":{"content":"SECRET"}}"#,
+    )
+    .unwrap();
+
+    for id in ["../outside", "../../outside"] {
+        prompts_cmd(&store)
+            .args([
+                "sessions",
+                "prompts",
+                "--project",
+                FIXTURE_PROJECT,
+                "--session",
+                id,
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("INVALID_SESSION_ID"))
+            .stdout(predicate::str::contains("SECRET").not());
+    }
+
+    // An absolute path replaces the whole prefix under Path::join.
+    prompts_cmd(&store)
+        .args(["sessions", "prompts", "--project", FIXTURE_PROJECT])
+        .arg("--session")
+        .arg(outside.with_extension("").as_os_str())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("INVALID_SESSION_ID"))
+        .stdout(predicate::str::contains("SECRET").not());
+}
+
+#[test]
+fn test_sessions_prompts_reports_unreadable_transcript() {
+    // Regression: a read failure was swallowed by unwrap_or_default,
+    // reporting "success" with zero prompts.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("projects").join(FIXTURE_SLUG);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("locked.jsonl");
+        std::fs::write(&f, "{}\n").unwrap();
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+
+        // Running as root defeats the permission bit entirely.
+        if std::fs::read_to_string(&f).is_err() {
+            let mut cmd = cargo_bin_cmd!("kozmotic");
+            cmd.env("CLAUDE_CONFIG_DIR", root.path())
+                .env_remove("CLAUDE_CODE_SESSION_ID")
+                .args([
+                    "sessions",
+                    "prompts",
+                    "--project",
+                    FIXTURE_PROJECT,
+                    "--session",
+                    "locked",
+                ])
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains("TRANSCRIPT_UNREADABLE"));
+        }
+        let _ = std::fs::set_permissions(
+            &f,
+            std::fs::Permissions::from_mode(0o644),
+        );
+    }
+}
+
+#[test]
+fn test_status_line_clamps_absurd_width() {
+    // Regression: width came from --width/COLUMNS unbounded and hit
+    // " ".repeat(pad) -- usize::MAX panicked with a capacity
+    // overflow, and a large-but-valid COLUMNS emitted megabytes.
+    let session = r#"{"model":{"display_name":"X"}}"#;
+
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    let out = cmd
+        .args(["status-line", "--show", "model~cost", "--width"])
+        .arg(u64::MAX.to_string())
+        .write_stdin(session)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        out.len() < 4096,
+        "absurd --width produced {} bytes",
+        out.len()
+    );
+
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    let out = cmd
+        .args(["status-line", "--show", "model~cost"])
+        .env("COLUMNS", "9999999")
+        .write_stdin(session)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        out.len() < 4096,
+        "absurd COLUMNS produced {} bytes",
+        out.len()
+    );
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use crate::output::{Output, OutputFormat};
+use crate::output::{CliError, Output, OutputFormat, Tool, emit_error};
 
 #[derive(Debug, thiserror::Error)]
 enum SelfInstallError {
@@ -15,7 +15,7 @@ enum SelfInstallError {
     CurrentExe(std::io::Error),
 }
 
-impl SelfInstallError {
+impl CliError for SelfInstallError {
     fn code(&self) -> &'static str {
         match self {
             SelfInstallError::HomeNotFound => "HOME_NOT_FOUND",
@@ -24,20 +24,6 @@ impl SelfInstallError {
             SelfInstallError::CurrentExe(_) => "CURRENT_EXE",
         }
     }
-}
-
-fn emit_error(format: &OutputFormat, err: &SelfInstallError) -> ExitCode {
-    match format {
-        OutputFormat::Json => {
-            let output =
-                Output::error("self-install", err.code(), &err.to_string());
-            eprintln!("{}", serde_json::to_string_pretty(&output).unwrap());
-        }
-        OutputFormat::Human => {
-            eprintln!("Error [{}]: {}", err.code(), err);
-        }
-    }
-    ExitCode::FAILURE
 }
 
 pub fn home_dir() -> Option<PathBuf> {
@@ -51,28 +37,40 @@ pub fn home_dir() -> Option<PathBuf> {
     }
 }
 
+/// Derives `clap::Args` directly -- see the note on
+/// [`crate::sessions::PromptsArgs`].
+#[derive(clap::Args)]
+pub struct SelfInstallArgs {
+    /// Override the install directory
+    #[arg(long)]
+    pub target_dir: Option<PathBuf>,
+}
+
 pub fn handle_self_install(
-    format: &OutputFormat,
-    target_dir: Option<PathBuf>,
+    format: OutputFormat,
+    args: SelfInstallArgs,
 ) -> ExitCode {
+    // Every failure here reports the same way; naming it once keeps
+    // each branch to a single readable line.
+    let fail = |e: SelfInstallError| emit_error(format, Tool::SelfInstall, &e);
     let exe = match std::env::current_exe() {
         Ok(p) => p,
         Err(e) => {
-            return emit_error(format, &SelfInstallError::CurrentExe(e));
+            return fail(SelfInstallError::CurrentExe(e));
         }
     };
 
-    let target_dir = if let Some(d) = target_dir {
+    let target_dir = if let Some(d) = args.target_dir {
         d
     } else {
         let Some(home) = home_dir() else {
-            return emit_error(format, &SelfInstallError::HomeNotFound);
+            return fail(SelfInstallError::HomeNotFound);
         };
         home.join(".claude").join("bin")
     };
 
     if let Err(e) = std::fs::create_dir_all(&target_dir) {
-        return emit_error(format, &SelfInstallError::CreateDir(e));
+        return fail(SelfInstallError::CreateDir(e));
     }
 
     let binary_name = if cfg!(windows) {
@@ -83,7 +81,7 @@ pub fn handle_self_install(
     let dest = target_dir.join(binary_name);
 
     if let Err(e) = std::fs::copy(&exe, &dest) {
-        return emit_error(format, &SelfInstallError::CopyBinary(e));
+        return fail(SelfInstallError::CopyBinary(e));
     }
 
     #[cfg(unix)]
@@ -91,7 +89,7 @@ pub fn handle_self_install(
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o755);
         if let Err(e) = std::fs::set_permissions(&dest, perms) {
-            return emit_error(format, &SelfInstallError::CopyBinary(e));
+            return fail(SelfInstallError::CopyBinary(e));
         }
     }
 
@@ -109,7 +107,7 @@ pub fn handle_self_install(
                 "installed_path": installed_path,
                 "hook_example": hook_example,
             });
-            let output = Output::success("self-install", data);
+            let output = Output::success(Tool::SelfInstall, data);
             println!("{}", serde_json::to_string_pretty(&output).unwrap());
         }
         OutputFormat::Human => {

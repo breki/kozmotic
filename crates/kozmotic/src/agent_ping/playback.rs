@@ -29,7 +29,7 @@ pub fn play_sound(
         return r;
     }
     let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+        .map_err(|e| AgentPingError::AudioDeviceError(Box::new(e)))?;
     stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
@@ -37,7 +37,7 @@ pub fn play_sound(
     for i in 0..repeat {
         let cursor = std::io::Cursor::new(data);
         let source = rodio::Decoder::new(cursor)
-            .map_err(|e| AgentPingError::UnsupportedFormat(e.to_string()))?;
+            .map_err(|e| AgentPingError::UnsupportedFormat(Box::new(e)))?;
         sink.append(source);
         sink.sleep_until_end();
         if i + 1 < repeat {
@@ -60,7 +60,7 @@ pub fn play_frequency(
         return r;
     }
     let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+        .map_err(|e| AgentPingError::AudioDeviceError(Box::new(e)))?;
     stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
@@ -87,7 +87,7 @@ pub fn play_file(
         return r;
     }
     let mut stream = rodio::OutputStreamBuilder::open_default_stream()
-        .map_err(|e| AgentPingError::AudioDeviceError(e.to_string()))?;
+        .map_err(|e| AgentPingError::AudioDeviceError(Box::new(e)))?;
     stream.log_on_drop(false);
     let sink = rodio::Sink::connect_new(stream.mixer());
     sink.set_volume(volume);
@@ -97,7 +97,7 @@ pub fn play_file(
             .map_err(|_| AgentPingError::FileNotFound(path.to_string()))?;
         let reader = std::io::BufReader::new(file);
         let source = rodio::Decoder::new(reader)
-            .map_err(|e| AgentPingError::UnsupportedFormat(e.to_string()))?;
+            .map_err(|e| AgentPingError::UnsupportedFormat(Box::new(e)))?;
         sink.append(source);
         sink.sleep_until_end();
         if i + 1 < repeat {

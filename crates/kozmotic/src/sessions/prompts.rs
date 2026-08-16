@@ -10,7 +10,29 @@
 //! `isMeta`. The remaining synthetic entries announce themselves with
 //! a leading XML-ish tag, which is what [`classify`] keys on.
 
+use std::collections::VecDeque;
+use std::io::BufRead;
+
 use serde::{Deserialize, Serialize};
+
+/// Lines longer than this are skipped rather than parsed.
+///
+/// Transcripts embed tool results, pasted files, and base64 blobs, so
+/// a single line can be megabytes. Nothing useful to this command is
+/// that long — a prompt that big is not a prompt — and parsing it
+/// costs far more than skipping it.
+const MAX_LINE_BYTES: usize = 1 << 20;
+
+/// Whether slash-command invocations are part of the result.
+///
+/// A bare `bool` here reads as `extract(text, true)` at the call
+/// site, and the CLI flag is spelled negatively (`--no-commands`),
+/// which is exactly where an inversion slips through unnoticed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommandFilter {
+    Include,
+    Omit,
+}
 
 /// Tags that wrap content Claude Code generated on the user's
 /// behalf. None of it was typed, so none of it is a prompt.
@@ -77,15 +99,37 @@ struct Message {
     content: Option<serde_json::Value>,
 }
 
-/// Parse a whole transcript, keeping only user input.
+/// Parse a transcript, keeping only user input.
 ///
-/// Malformed lines are skipped rather than fatal: transcripts are
-/// appended to by a live session, so the last line can be a partial
-/// write, and one bad line should not lose the other thousand.
-pub fn extract(transcript: &str, include_commands: bool) -> Vec<Prompt> {
-    let mut prompts = Vec::new();
+/// Streams line by line and retains at most `limit` prompts, so cost
+/// tracks the longest line rather than the file. Transcripts reach
+/// hundreds of megabytes on a long session, and the common call is
+/// for the last handful of prompts.
+///
+/// Malformed lines are skipped rather than fatal: a live session is
+/// appending to this file, so the last line can be a partial write,
+/// and one bad line should not lose the other thousand. Invalid
+/// UTF-8 is lossily decoded for the same reason — a torn multi-byte
+/// character at EOF damages its own line and nothing else. A genuine
+/// I/O failure is still returned as an error.
+pub fn extract(
+    mut reader: impl BufRead,
+    filter: CommandFilter,
+    limit: Option<usize>,
+) -> std::io::Result<Vec<Prompt>> {
+    let mut kept: VecDeque<Prompt> = VecDeque::new();
+    let mut raw = Vec::new();
     let mut seen = 0;
-    for line in transcript.lines() {
+
+    loop {
+        raw.clear();
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            break;
+        }
+        if raw.len() > MAX_LINE_BYTES {
+            continue;
+        }
+        let line = String::from_utf8_lossy(&raw);
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -100,12 +144,13 @@ pub fn extract(transcript: &str, include_commands: bool) -> Vec<Prompt> {
             continue;
         };
         // Number before filtering, so an index means the same thing
-        // whether or not commands were asked for.
+        // whether or not commands were asked for, and survives the
+        // window below.
         seen += 1;
-        if kind == Kind::Command && !include_commands {
+        if kind == Kind::Command && filter == CommandFilter::Omit {
             continue;
         }
-        prompts.push(Prompt {
+        kept.push_back(Prompt {
             index: seen,
             kind,
             text: body,
@@ -114,8 +159,14 @@ pub fn extract(transcript: &str, include_commands: bool) -> Vec<Prompt> {
             uuid: record.uuid,
             git_branch: record.git_branch,
         });
+        if let Some(limit) = limit
+            && kept.len() > limit
+        {
+            kept.pop_front();
+        }
     }
-    prompts
+
+    Ok(kept.into())
 }
 
 /// The string content of a record that could be user input, or
@@ -167,6 +218,17 @@ fn tag_value(text: &str, tag: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// Run the extractor over an in-memory transcript. Reading from
+    /// a `&[u8]` cannot fail, so the tests assert on the prompts.
+    fn run(input: &str, filter: CommandFilter) -> Vec<Prompt> {
+        extract(input.as_bytes(), filter, None).expect("in-memory read")
+    }
+
+    fn run_limited(input: &str, limit: usize) -> Vec<Prompt> {
+        extract(input.as_bytes(), CommandFilter::Include, Some(limit))
+            .expect("in-memory read")
+    }
+
     fn user(content: &str) -> String {
         format!(
             r#"{{"type":"user","uuid":"u1","timestamp":"2026-08-14T19:00:00Z",
@@ -178,7 +240,7 @@ mod tests {
 
     #[test]
     fn keeps_typed_prompts() {
-        let out = extract(&user("add a widget"), true);
+        let out = run(&user("add a widget"), CommandFilter::Include);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].kind, Kind::Prompt);
         assert_eq!(out[0].text, "add a widget");
@@ -199,7 +261,7 @@ mod tests {
             "<command-message>release</command-message>\n\
              <command-name>/release</command-name>",
         );
-        let out = extract(&format!("{a}\n{b}"), true);
+        let out = run(&format!("{a}\n{b}"), CommandFilter::Include);
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].kind, Kind::Command);
         assert_eq!(out[0].command.as_deref(), Some("/commit"));
@@ -215,7 +277,7 @@ mod tests {
             user("<command-name>/commit</command-name>"),
             user("real prompt")
         );
-        let out = extract(&input, false);
+        let out = run(&input, CommandFilter::Omit);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].text, "real prompt");
         // The dropped command still consumed index 1, so this prompt
@@ -248,13 +310,13 @@ mod tests {
             "not json at all".to_string(),
             String::new(),
         ];
-        assert!(extract(&lines.join("\n"), true).is_empty());
+        assert!(run(&lines.join("\n"), CommandFilter::Include).is_empty());
     }
 
     #[test]
     fn numbers_prompts_in_transcript_order() {
         let input = ["one", "two", "three"].map(user).join("\n");
-        let out = extract(&input, true);
+        let out = run(&input, CommandFilter::Include);
         let texts: Vec<_> = out.iter().map(|p| p.text.as_str()).collect();
         assert_eq!(texts, ["one", "two", "three"]);
         let idx: Vec<_> = out.iter().map(|p| p.index).collect();
@@ -262,8 +324,51 @@ mod tests {
     }
 
     #[test]
+    fn limit_keeps_the_last_prompts_without_renumbering() {
+        let input = ["one", "two", "three", "four"].map(user).join("\n");
+        let out = run_limited(&input, 2);
+        let got: Vec<_> =
+            out.iter().map(|p| (p.index, p.text.as_str())).collect();
+        assert_eq!(got, [(3, "three"), (4, "four")]);
+    }
+
+    #[test]
+    fn limit_larger_than_the_transcript_keeps_everything() {
+        let input = ["one", "two"].map(user).join("\n");
+        assert_eq!(run_limited(&input, 10).len(), 2);
+    }
+
+    #[test]
+    fn oversized_lines_are_skipped_not_parsed() {
+        let huge = user(&"x".repeat(MAX_LINE_BYTES + 1));
+        let input = format!("{huge}\n{}", user("kept"));
+        let out = run(&input, CommandFilter::Include);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].text, "kept");
+        // The skipped line never became a prompt, so it never
+        // consumed an index either.
+        assert_eq!(out[0].index, 1);
+    }
+
+    #[test]
+    fn a_torn_multibyte_character_damages_only_its_own_line() {
+        // A live session can be mid-write at EOF. Lossy decoding
+        // keeps the rest of the transcript readable.
+        let mut bytes = user("good one").into_bytes();
+        bytes.push(b'\n');
+        bytes
+            .extend_from_slice(br#"{"type":"user","message":{"content":"bad "#);
+        bytes.push(0xff);
+        bytes.extend_from_slice(br#""}}"#);
+        let out = extract(&bytes[..], CommandFilter::Include, None).unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].text, "good one");
+        assert!(out[1].text.starts_with("bad "));
+    }
+
+    #[test]
     fn unterminated_tag_is_treated_as_prose() {
-        let out = extract(&user("<command-name>/oops"), true);
+        let out = run(&user("<command-name>/oops"), CommandFilter::Include);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].kind, Kind::Prompt);
     }

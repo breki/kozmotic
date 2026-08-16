@@ -3,6 +3,26 @@
 
 use chrono::{DateTime, Local};
 
+/// Strip control characters from a string that came from outside the
+/// program, and bound its length.
+///
+/// The status line is redrawn continuously, and several widgets
+/// interpolate session-supplied text — model name, directory,
+/// worktree, agent, branch. A POSIX filename may contain `\x1b`, so a
+/// directory named with an embedded CSI sequence would otherwise have
+/// that sequence re-emitted to the terminal on every render, leaving
+/// colour or cursor state changed and making `display_width`'s
+/// measurement disagree with what is actually shown.
+pub fn sanitize(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() && *c != '\u{7f}')
+        .take(MAX_FIELD_CHARS)
+        .collect()
+}
+
+/// Upper bound on any single session-supplied field.
+const MAX_FIELD_CHARS: usize = 120;
+
 /// Compact age formatter with minute granularity: "5m", "1h 5m",
 /// "2d 3h". Used by `last-commit` where seconds are too noisy.
 pub fn age_compact(secs: u64) -> String {
@@ -41,73 +61,30 @@ pub fn duration_ms(ms: u64) -> String {
 ///
 /// Accepts forms like `2026-04-20T15:04:05Z`, `...T15:04:05.123Z`,
 /// or with a `+00:00` / `-HH:MM` offset. Non-UTC offsets are applied.
+/// Parse an RFC3339 timestamp to a Unix epoch second.
+///
+/// Delegates to chrono, which is already a direct dependency (the
+/// envelope's timestamp uses it). A hand-rolled parser here meant
+/// ~70 lines of offset arithmetic and a civil-days implementation to
+/// maintain, for a calculation the dependency graph already had.
+///
+/// The one accommodation: Claude Code has been observed emitting a
+/// space instead of `T` as the date/time separator, which is legal
+/// per RFC3339 section 5.6 but which chrono's strict parser rejects,
+/// so it is normalised first.
 pub fn parse_rfc3339(s: &str) -> Option<i64> {
-    let s = s.trim();
-    if s.len() < 19 {
-        return None;
-    }
-    let b = s.as_bytes();
-    // YYYY-MM-DDTHH:MM:SS
-    if b[4] != b'-' || b[7] != b'-' || (b[10] != b'T' && b[10] != b' ') {
-        return None;
-    }
-    if b[13] != b':' || b[16] != b':' {
-        return None;
-    }
-    let year: i64 = s.get(0..4)?.parse().ok()?;
-    let month: u32 = s.get(5..7)?.parse().ok()?;
-    let day: u32 = s.get(8..10)?.parse().ok()?;
-    let hour: i64 = s.get(11..13)?.parse().ok()?;
-    let minute: i64 = s.get(14..16)?.parse().ok()?;
-    let second: i64 = s.get(17..19)?.parse().ok()?;
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-
-    // Skip optional fractional seconds.
-    let mut i = 19;
-    if i < b.len() && b[i] == b'.' {
-        i += 1;
-        while i < b.len() && b[i].is_ascii_digit() {
-            i += 1;
+    let trimmed = s.trim();
+    let normalised = match trimmed.as_bytes().get(10) {
+        Some(b' ') => {
+            let mut owned = trimmed.to_string();
+            owned.replace_range(10..11, "T");
+            std::borrow::Cow::Owned(owned)
         }
-    }
-
-    // Parse offset.
-    let mut offset_secs: i64 = 0;
-    if i < b.len() {
-        match b[i] {
-            b'Z' | b'z' => {}
-            b'+' | b'-' => {
-                let sign: i64 = if b[i] == b'-' { -1 } else { 1 };
-                let oh: i64 = s.get(i + 1..i + 3)?.parse().ok()?;
-                let om: i64 = if b.len() > i + 3 && b[i + 3] == b':' {
-                    s.get(i + 4..i + 6)?.parse().ok()?
-                } else {
-                    s.get(i + 3..i + 5)?.parse().ok()?
-                };
-                offset_secs = sign * (oh * 3600 + om * 60);
-            }
-            _ => return None,
-        }
-    }
-
-    let days = days_from_civil(year, month, day);
-    let epoch = days * 86400 + hour * 3600 + minute * 60 + second - offset_secs;
-    Some(epoch)
-}
-
-/// Howard Hinnant's days-from-civil algorithm. Returns days since
-/// 1970-01-01 (can be negative).
-fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let m = i64::from(m);
-    let d = i64::from(d);
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
+        _ => std::borrow::Cow::Borrowed(trimmed),
+    };
+    DateTime::parse_from_rfc3339(&normalised)
+        .ok()
+        .map(|dt| dt.timestamp())
 }
 
 /// Format a Unix timestamp (seconds) as a local datetime using the
@@ -135,6 +112,26 @@ pub fn tokens(count: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_strips_escape_sequences() {
+        // A directory named with an embedded CSI sequence would
+        // otherwise re-emit it on every render.
+        assert_eq!(sanitize("proj\x1b[2J\x1b[1;31m"), "proj[2J[1;31m");
+        assert_eq!(sanitize("a\nb\tc\r"), "abc");
+        assert_eq!(sanitize("plain-name"), "plain-name");
+    }
+
+    #[test]
+    fn sanitize_bounds_length() {
+        let long = "x".repeat(MAX_FIELD_CHARS * 2);
+        assert_eq!(sanitize(&long).chars().count(), MAX_FIELD_CHARS);
+    }
+
+    #[test]
+    fn sanitize_keeps_non_ascii_text() {
+        assert_eq!(sanitize("café-日本"), "café-日本");
+    }
 
     #[test]
     fn format_duration_under_one_hour() {

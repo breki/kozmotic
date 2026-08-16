@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use super::format;
 use super::theme::{GREEN, RED, RESET, label, usage_color};
+use super::widget::Widget;
 
 #[derive(Deserialize, Default)]
 pub struct SessionData {
@@ -160,25 +161,25 @@ fn render_rate_limit(
 
 /// Render a session-backed widget, or `None` when the name belongs to
 /// another family or the widget has nothing to say.
-pub fn render(name: &str, data: &SessionData) -> Option<String> {
-    match name {
-        "model" => {
+pub fn render(widget: Widget, data: &SessionData) -> Option<String> {
+    match widget {
+        Widget::Model => {
             if data.model.display_name.is_empty() {
                 None
             } else {
-                Some(data.model.display_name.clone())
+                Some(format::sanitize(&data.model.display_name))
             }
         }
-        "context" => {
+        Widget::Context => {
             let pct = data.context_window.used_percentage;
             let color = usage_color(pct);
             Some(format!("{} {color}{pct:.1}%{RESET}", label("ctx")))
         }
-        "cost" => {
+        Widget::Cost => {
             let cost = data.cost.total_cost_usd;
             Some(format!("{} ${cost:.2}", label("cost")))
         }
-        "cost-rate" => {
+        Widget::CostRate => {
             let ms = data.cost.total_duration_ms;
             if ms == 0 {
                 return None;
@@ -187,20 +188,20 @@ pub fn render(name: &str, data: &SessionData) -> Option<String> {
             let rate = data.cost.total_cost_usd / hours;
             Some(format!("{} ${rate:.2}/h", label("rate")))
         }
-        "lines" => {
+        Widget::Lines => {
             let added = data.cost.total_lines_added;
             let removed = data.cost.total_lines_removed;
             Some(format!("{GREEN}+{added}{RESET}/{RED}-{removed}{RESET}"))
         }
-        "duration" => {
+        Widget::Duration => {
             let ms = data.cost.total_duration_ms;
             Some(format!("{} {}", label("time"), format::duration_ms(ms)))
         }
-        "api-duration" => {
+        Widget::ApiDuration => {
             let ms = data.cost.total_api_duration_ms;
             Some(format!("{} {}", label("api"), format::duration_ms(ms)))
         }
-        "tokens" => {
+        Widget::Tokens => {
             let input = data.context_window.total_input_tokens;
             let output = data.context_window.total_output_tokens;
             Some(format!(
@@ -210,16 +211,16 @@ pub fn render(name: &str, data: &SessionData) -> Option<String> {
                 format::tokens(output)
             ))
         }
-        "directory" => {
+        Widget::Directory => {
             if data.workspace.current_dir.is_empty() {
                 None
             } else {
                 let dir = &data.workspace.current_dir;
                 let name = dir.rsplit(['/', '\\']).next().unwrap_or(dir);
-                Some(name.to_string())
+                Some(format::sanitize(name))
             }
         }
-        "session" => {
+        Widget::Session => {
             if data.session_id.is_empty() {
                 None
             } else {
@@ -227,31 +228,39 @@ pub fn render(name: &str, data: &SessionData) -> Option<String> {
                 Some(format!("{} {short}", label("sid")))
             }
         }
-        "rate-limit" => {
+        Widget::RateLimit => {
             render_rate_limit("5h", &data.rate_limits.five_hour, "%H:%M")
         }
-        "rate-limit-7d" => {
+        Widget::RateLimit7d => {
             render_rate_limit("7d", &data.rate_limits.seven_day, "%a %H:%M")
         }
-        "vim" => {
+        Widget::Vim => {
             if data.vim.mode.is_empty() {
                 None
             } else {
                 Some(data.vim.mode.clone())
             }
         }
-        "worktree" => {
+        Widget::Worktree => {
             if data.worktree.name.is_empty() {
                 None
             } else {
-                Some(format!("{} {}", label("wt"), data.worktree.name))
+                Some(format!(
+                    "{} {}",
+                    label("wt"),
+                    format::sanitize(&data.worktree.name)
+                ))
             }
         }
-        "agent" => {
+        Widget::Agent => {
             if data.agent.name.is_empty() {
                 None
             } else {
-                Some(format!("{} {}", label("agent"), data.agent.name))
+                Some(format!(
+                    "{} {}",
+                    label("agent"),
+                    format::sanitize(&data.agent.name)
+                ))
             }
         }
         _ => None,
@@ -323,9 +332,14 @@ mod tests {
     #[test]
     fn empty_session_fields_render_nothing() {
         let data = SessionData::default();
-        for widget in
-            ["model", "vim", "worktree", "agent", "directory", "session"]
-        {
+        for widget in [
+            Widget::Model,
+            Widget::Vim,
+            Widget::Worktree,
+            Widget::Agent,
+            Widget::Directory,
+            Widget::Session,
+        ] {
             assert_eq!(render(widget, &data), None, "{widget}");
         }
     }
@@ -333,12 +347,13 @@ mod tests {
     #[test]
     fn cost_rate_hidden_until_session_has_duration() {
         let data = SessionData::default();
-        assert_eq!(render("cost-rate", &data), None);
+        assert_eq!(render(Widget::CostRate, &data), None);
     }
 
     #[test]
     fn foreign_widget_name_is_declined() {
         let data = SessionData::default();
-        assert_eq!(render("git-branch", &data), None);
+        // A widget owned by another family is declined.
+        assert_eq!(render(Widget::GitBranch, &data), None);
     }
 }

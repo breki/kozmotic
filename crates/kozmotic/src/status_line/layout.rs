@@ -10,39 +10,56 @@
 
 use unicode_width::UnicodeWidthChar;
 
+use super::widget::{UnknownWidget, Widget};
+
 /// Marker inside a line spec: widgets after it are right-aligned.
 pub const RIGHT_MARKER: char = '~';
 
 /// Fallback when no width is given and none can be detected.
 const DEFAULT_WIDTH: usize = 80;
 
+/// Upper bound on the width we will pad to.
+///
+/// `COLUMNS` is inherited from the environment, so a nonsense value
+/// arrives without the user ever typing it, and the padding it
+/// produces is allocated on *every* render: unclamped, a `usize`
+/// reaches `" ".repeat(pad)` and either panics with a capacity
+/// overflow or quietly emits megabytes into the host's status bar.
+const MAX_WIDTH: usize = 1000;
+
 /// A line of the status bar, split into its two alignment groups.
-pub struct LineSpec<'a> {
-    pub left: Vec<&'a str>,
-    pub right: Vec<&'a str>,
+#[derive(Debug)]
+pub struct LineSpec {
+    pub left: Vec<Widget>,
+    pub right: Vec<Widget>,
 }
 
-impl<'a> LineSpec<'a> {
+impl LineSpec {
     /// Parse one line of a `--show` value. Everything before the
     /// first `~` flows left; everything after is right-aligned.
-    pub fn parse(spec: &'a str) -> Self {
+    ///
+    /// Fallible: an unrecognised name is reported rather than
+    /// silently dropped, which is the whole point of parsing into
+    /// [`Widget`] here instead of matching strings at render time.
+    pub fn parse(spec: &str) -> Result<Self, UnknownWidget> {
         match spec.split_once(RIGHT_MARKER) {
-            Some((left, right)) => Self {
-                left: widget_names(left),
-                right: widget_names(right),
-            },
-            None => Self {
-                left: widget_names(spec),
+            Some((left, right)) => Ok(Self {
+                left: widgets(left)?,
+                right: widgets(right)?,
+            }),
+            None => Ok(Self {
+                left: widgets(spec)?,
                 right: Vec::new(),
-            },
+            }),
         }
     }
 }
 
-fn widget_names(spec: &str) -> Vec<&str> {
+fn widgets(spec: &str) -> Result<Vec<Widget>, UnknownWidget> {
     spec.split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
+        .map(str::parse)
         .collect()
 }
 
@@ -94,13 +111,18 @@ pub fn compose(
         return left_text;
     }
     let right_text = right.join(separator);
+    // `compose` is public and takes the width it is handed, so the
+    // allocation is bounded here too rather than trusting every
+    // caller to have gone through `resolve_width`.
     if left_text.is_empty() {
-        let pad = width.saturating_sub(display_width(&right_text));
+        let pad = width
+            .saturating_sub(display_width(&right_text))
+            .min(MAX_WIDTH);
         return format!("{}{right_text}", " ".repeat(pad));
     }
 
     let used = display_width(&left_text) + display_width(&right_text);
-    let pad = width.saturating_sub(used).max(1);
+    let pad = width.saturating_sub(used).clamp(1, MAX_WIDTH);
     format!("{left_text}{}{right_text}", " ".repeat(pad))
 }
 
@@ -111,13 +133,17 @@ pub fn compose(
 /// The probe matters because Claude Code pipes our stdout, so a
 /// terminal query against the pipe reports nothing; `terminal_size`
 /// falls back to the controlling terminal.
+///
+/// Values outside `1..=MAX_WIDTH` are treated as absent rather than
+/// honoured — see [`MAX_WIDTH`].
 pub fn resolve_width(explicit: Option<usize>) -> usize {
+    let sane = |w: &usize| (1..=MAX_WIDTH).contains(w);
     explicit
-        .filter(|w| *w > 0)
+        .filter(sane)
         .or_else(|| std::env::var("COLUMNS").ok()?.trim().parse::<usize>().ok())
-        .filter(|w| *w > 0)
+        .filter(sane)
         .or_else(|| terminal_size::terminal_size().map(|(w, _)| w.0 as usize))
-        .filter(|w| *w > 0)
+        .filter(sane)
         .unwrap_or(DEFAULT_WIDTH)
 }
 
@@ -155,23 +181,32 @@ mod tests {
 
     #[test]
     fn parse_without_marker_is_all_left() {
-        let spec = LineSpec::parse("model, context ,cost");
-        assert_eq!(spec.left, vec!["model", "context", "cost"]);
+        let spec = LineSpec::parse("model, context ,cost").unwrap();
+        assert_eq!(
+            spec.left,
+            vec![Widget::Model, Widget::Context, Widget::Cost]
+        );
         assert!(spec.right.is_empty());
     }
 
     #[test]
     fn parse_splits_on_the_marker() {
-        let spec = LineSpec::parse("model,context~cost,rate-limit");
-        assert_eq!(spec.left, vec!["model", "context"]);
-        assert_eq!(spec.right, vec!["cost", "rate-limit"]);
+        let spec = LineSpec::parse("model,context~cost,rate-limit").unwrap();
+        assert_eq!(spec.left, vec![Widget::Model, Widget::Context]);
+        assert_eq!(spec.right, vec![Widget::Cost, Widget::RateLimit]);
     }
 
     #[test]
     fn parse_allows_an_empty_left_group() {
-        let spec = LineSpec::parse("~cost");
+        let spec = LineSpec::parse("~cost").unwrap();
         assert!(spec.left.is_empty());
-        assert_eq!(spec.right, vec!["cost"]);
+        assert_eq!(spec.right, vec![Widget::Cost]);
+    }
+
+    #[test]
+    fn parse_rejects_an_unknown_widget() {
+        let err = LineSpec::parse("model,contxt").unwrap_err();
+        assert_eq!(err.name, "contxt");
     }
 
     #[test]

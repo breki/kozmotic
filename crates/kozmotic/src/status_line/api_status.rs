@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::theme::{GREEN, RED, RESET, YELLOW, label};
+use super::widget::Widget;
 
 mod io;
 
@@ -102,8 +103,8 @@ fn indicator_text(indicator: &str) -> (&'static str, &'static str) {
 
 /// Render the `api-status` widget, or `None` for any other name.
 /// Unlike most widgets this never renders empty — see [`ApiHealth`].
-pub fn render(name: &str) -> Option<String> {
-    if name != "api-status" {
+pub fn render(widget: Widget) -> Option<String> {
+    if widget != Widget::ApiStatus {
         return None;
     }
     Some(render_api_health(&io::get_api_status()))
@@ -234,6 +235,7 @@ mod tests {
     /// *before* any network call is attempted.
     #[test]
     fn foreign_widget_name_is_declined() {
-        assert_eq!(render("model"), None);
+        // A widget owned by another family is declined.
+        assert_eq!(render(Widget::Model), None);
     }
 }

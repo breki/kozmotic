@@ -58,12 +58,59 @@ and this project adheres to
 - Synced the rustbase template from 0.4.0 to 0.17.0. CI/CD
   workflows, the supply-chain gates, and the frontend and
   deployment scaffolding were deliberately not taken.
+- sessions prompts streams the transcript and keeps only --limit prompts,
+  instead of reading the whole file and every prompt into memory first. Cost now
+  tracks the longest line rather than the file, which reaches hundreds of
+  megabytes on a long session
+- An unknown widget in --show is now reported, listing the valid names, instead
+  of rendering nothing. A misspelled widget previously produced a shorter line
+  with no diagnostic anywhere
+- status-line honours --format on failure and reports a machine-readable code
+  (NO_INPUT, INVALID_JSON, UNKNOWN_WIDGET). It was the only subcommand that
+  ignored the global flag
+- Error reporting is shared across subcommands through a CliError trait, and the
+  error payload is a typed struct rather than an inline JSON literal. Three
+  subcommands each carried their own copy of the same reporting code
+- RFC3339 parsing delegates to chrono, already a direct dependency, replacing
+  about 70 lines of hand-written offset and civil-date arithmetic
+- The global --format flag is a clap ValueEnum, so --help lists its possible
+  values and an invalid one is rejected with a standard message
+- **BREAKING:** The muted agent-ping payload now has the same shape as a real
+  play: a full details object plus muted: true, where it previously emitted a
+  bare sound field that read 'unknown' for a --frequency invocation and omitted
+  details entirely. Consumers reading data.details or data.sound see a
+  consistent shape regardless of mute state
 
 ### Fixed
 
+- sessions prompts rejected a path-shaped --session: the id went straight into a
+  filename, and Path::join neither normalises .. nor resists an absolute
+  argument, so any readable *.jsonl on the machine could be dumped. Session ids
+  are now validated as bare tokens
+- status-line no longer panics or allocates unboundedly on an absurd width.
+  --width and COLUMNS were unclamped into a repeat(), so usize::MAX panicked
+  with a capacity overflow and COLUMNS=9999999 emitted 10 MB on every render
+- sessions prompts reports an unreadable transcript instead of returning success
+  with zero prompts. A permission error or a torn multi-byte character at EOF
+  previously made the whole session look empty
 - The Stop hook now actually runs. Its re-entry guard grepped for the
   stop_hook_active key rather than its value, and the payload always contains
   the key, so the hook exited early every time
+- agent-ping bounds --duration, --repeat and --interval. Unvalidated, a typo
+  could hold the audio device and block the hook for days
+- The api-status cache moved from a fixed name in the world-writable temp
+  directory to ~/.claude/, and is written atomically. Another user could
+  previously pre-create the file, silently failing our writes or choosing the
+  indicator we display
+- git-* widgets now run in the session's working directory. They inherited the
+  status-line process's own cwd while the disk widget used the session
+  directory, so one line could describe two repositories
+- Control characters are stripped from session-supplied text (model, directory,
+  worktree, agent, branch). A directory name containing an escape sequence would
+  otherwise re-emit it to the terminal on every render
+- agent-ping validates its arguments before the mute check. A typo'd preset
+  previously exited 0 whenever sounds happened to be muted, so a broken hook
+  config passed validation and failed later for someone else
 - The coverage gate now fails when it measures nothing, whatever the ignore
   pattern. The previous guard only rejected four literal spellings, so a
   near-miss like 'src' silently reduced the gate to a vacuous pass

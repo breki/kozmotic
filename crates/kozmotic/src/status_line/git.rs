@@ -1,11 +1,13 @@
 //! Git-backed widgets and the per-render cache behind them.
 
 use std::cell::OnceCell;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
 use super::format;
 use super::theme::{CYAN, GREEN, RED, RESET, YELLOW, label};
+use super::widget::Widget;
 
 #[derive(Debug, Default, PartialEq)]
 struct GitFileCounts {
@@ -147,6 +149,9 @@ fn render_status_counts(staged: usize, modified: usize) -> Option<String> {
 /// is spawned at most once per render.
 #[derive(Default)]
 pub struct GitContext {
+    /// Directory every `git` process is run in. The session's
+    /// working directory, not ours — see [`GitContext::new`].
+    dir: Option<PathBuf>,
     branch: OnceCell<Option<String>>,
     ahead_behind: OnceCell<Option<(usize, usize)>>,
     porcelain: OnceCell<Option<String>>,
@@ -155,8 +160,13 @@ pub struct GitContext {
     last_commit: OnceCell<Option<String>>,
 }
 
-fn run_git(args: &[&str]) -> Option<String> {
-    let output = Command::new("git").args(args).output().ok()?;
+fn run_git(dir: Option<&Path>, args: &[&str]) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
+    let output = cmd.output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -164,11 +174,29 @@ fn run_git(args: &[&str]) -> Option<String> {
 }
 
 impl GitContext {
+    /// Bind the git widgets to the session's working directory.
+    ///
+    /// Without this every `git` call inherits the status-line
+    /// process's own cwd, which is whatever Claude Code happened to
+    /// spawn us from — so `git-branch` could describe one repository
+    /// while `disk` (which already uses the session directory)
+    /// describes another, on the same rendered line. Silent wrong
+    /// data in a status bar is worse than an absent widget.
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir: Some(dir),
+            ..Self::default()
+        }
+    }
+
+    fn dir(&self) -> Option<&Path> {
+        self.dir.as_deref()
+    }
     fn branch(&self) -> Option<&str> {
         self.branch
             .get_or_init(|| {
-                run_git(&["branch", "--show-current"])
-                    .map(|s| s.trim().to_string())
+                run_git(self.dir(), &["branch", "--show-current"])
+                    .map(|s| format::sanitize(s.trim()))
                     .filter(|s| !s.is_empty())
             })
             .as_deref()
@@ -176,31 +204,31 @@ impl GitContext {
 
     fn ahead_behind(&self) -> Option<(usize, usize)> {
         *self.ahead_behind.get_or_init(|| {
-            let stdout = run_git(&[
-                "rev-list",
-                "--left-right",
-                "--count",
-                "HEAD...@{upstream}",
-            ])?;
+            let stdout = run_git(
+                self.dir(),
+                &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
+            )?;
             parse_ahead_behind(&stdout)
         })
     }
 
     fn porcelain(&self) -> Option<&str> {
         self.porcelain
-            .get_or_init(|| run_git(&["status", "--porcelain"]))
+            .get_or_init(|| run_git(self.dir(), &["status", "--porcelain"]))
             .as_deref()
     }
 
     fn numstat_unstaged(&self) -> Option<&str> {
         self.numstat_unstaged
-            .get_or_init(|| run_git(&["diff", "--numstat"]))
+            .get_or_init(|| run_git(self.dir(), &["diff", "--numstat"]))
             .as_deref()
     }
 
     fn numstat_staged(&self) -> Option<&str> {
         self.numstat_staged
-            .get_or_init(|| run_git(&["diff", "--cached", "--numstat"]))
+            .get_or_init(|| {
+                run_git(self.dir(), &["diff", "--cached", "--numstat"])
+            })
             .as_deref()
     }
 
@@ -210,7 +238,7 @@ impl GitContext {
     fn last_commit(&self) -> Option<&str> {
         self.last_commit
             .get_or_init(|| {
-                let raw = run_git(&["log", "-1", "--format=%at"])?;
+                let raw = run_git(self.dir(), &["log", "-1", "--format=%at"])?;
                 let ts: i64 = raw.trim().parse().ok()?;
                 let now = SystemTime::now()
                     .duration_since(SystemTime::UNIX_EPOCH)
@@ -247,22 +275,22 @@ impl GitContext {
 
 /// Render a git-backed widget, or `None` when the name belongs to
 /// another family or there is nothing to report.
-pub fn render(name: &str, git: &GitContext) -> Option<String> {
-    match name {
-        "git-branch" => git.branch().map(|b| format!("{CYAN}{b}{RESET}")),
-        "git-ahead" => {
+pub fn render(widget: Widget, git: &GitContext) -> Option<String> {
+    match widget {
+        Widget::GitBranch => git.branch().map(|b| format!("{CYAN}{b}{RESET}")),
+        Widget::GitAhead => {
             let (ahead, behind) = git.ahead_behind()?;
             render_ahead_behind(ahead, behind)
         }
-        "git-files" => Some(render_file_counts(&git.file_counts()?)),
-        "git-lines" => {
+        Widget::GitFiles => Some(render_file_counts(&git.file_counts()?)),
+        Widget::GitLines => {
             let (added, deleted) = git.diff_lines()?;
             render_diff_lines(added, deleted)
         }
-        "last-commit" => {
+        Widget::LastCommit => {
             git.last_commit().map(|s| format!("{} {s}", label("last")))
         }
-        "git-status" => {
+        Widget::GitStatus => {
             let (staged, modified) = git.status_counts()?;
             render_status_counts(staged, modified)
         }
@@ -390,7 +418,8 @@ R  renamed.rs
     #[test]
     fn foreign_widget_name_is_declined() {
         let git = GitContext::default();
-        assert_eq!(render("model", &git), None);
+        // A widget owned by another family is declined.
+        assert_eq!(render(Widget::Model, &git), None);
     }
 
     /// The widget names route to the right renderer. Values depend
@@ -400,12 +429,12 @@ R  renamed.rs
     fn git_widgets_answer_consistently() {
         let git = GitContext::default();
         for widget in [
-            "git-branch",
-            "git-ahead",
-            "git-files",
-            "git-lines",
-            "last-commit",
-            "git-status",
+            Widget::GitBranch,
+            Widget::GitAhead,
+            Widget::GitFiles,
+            Widget::GitLines,
+            Widget::LastCommit,
+            Widget::GitStatus,
         ] {
             let first = render(widget, &git);
             assert_eq!(first, render(widget, &git), "{widget} is not stable");

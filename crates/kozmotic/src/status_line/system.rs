@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use sysinfo::{DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
 use super::theme::{RESET, label, usage_color};
+use super::widget::Widget;
 
 /// A used-of-total byte quantity: RAM, or a mounted filesystem.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -157,11 +158,13 @@ fn render_usage(lbl: &str, usage: Usage) -> String {
 
 /// Render a host-backed widget, or `None` when the name belongs to
 /// another family or the platform reports nothing.
-pub fn render(name: &str, sys: &SystemContext) -> Option<String> {
-    match name {
-        "host" => sys.host_name().map(|h| format!("{} {h}", label("host"))),
-        "ram" => sys.memory().map(|usage| render_usage("ram", usage)),
-        "disk" => sys.disk().map(|usage| render_usage("disk", usage)),
+pub fn render(widget: Widget, sys: &SystemContext) -> Option<String> {
+    match widget {
+        Widget::Host => {
+            sys.host_name().map(|h| format!("{} {h}", label("host")))
+        }
+        Widget::Ram => sys.memory().map(|usage| render_usage("ram", usage)),
+        Widget::Disk => sys.disk().map(|usage| render_usage("disk", usage)),
         _ => None,
     }
 }
@@ -376,7 +379,7 @@ mod tests {
     #[test]
     fn host_widgets_render_on_this_machine() {
         let sys = SystemContext::new(PathBuf::from("."));
-        for widget in ["host", "ram", "disk"] {
+        for widget in [Widget::Host, Widget::Ram, Widget::Disk] {
             let out = render(widget, &sys)
                 .unwrap_or_else(|| panic!("{widget} should render"));
             assert!(!out.is_empty());
@@ -386,7 +389,8 @@ mod tests {
     #[test]
     fn foreign_widget_name_is_declined() {
         let sys = SystemContext::new(PathBuf::from("."));
-        assert_eq!(render("model", &sys), None);
+        // A widget owned by another family is declined.
+        assert_eq!(render(Widget::Model, &sys), None);
     }
 
     #[test]
