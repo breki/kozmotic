@@ -10,6 +10,35 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `status-line` can right-align part of a line. A `~` in
+  the `--show` value splits that line: widgets after it
+  are pushed to the right edge, e.g.
+  `--show 'git-branch,git-files~cost,rate-limit'`.
+  Padding is measured in display columns, so ANSI colours
+  and double-width characters do not skew it, and a line
+  too narrow to fit falls back to a single space rather
+  than truncating mid-escape.
+- `status-line --width N` sets the column count to align
+  against. Without it the width resolves from `COLUMNS`,
+  then the controlling terminal, then 80 — Claude Code
+  pipes the command's stdout, so the terminal cannot be
+  queried through it.
+
+### Changed
+
+- README: documented `agent-ping` and `self install`,
+  which had no sections of their own; replaced the
+  incorrect claim that a newline separator produces a
+  multi-line status bar (`;` in `--show` does that);
+  pointed the development section at the `xtask`
+  commands the project actually requires; and marked the
+  delivered roadmap items as shipped.
+- README: restored the `self install` explanation and
+  hook example next to the install command, where the
+  platform tables had separated them.
+
 ## [1.2.1] - 2026-08-14
 
 ### Added

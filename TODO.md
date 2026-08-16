@@ -1,10 +1,14 @@
 /# TODO
 
-- Provide a CLI switch for right-aligning certain status line widgets.
-- Update README with new features and installation instructions.
-
 ## Done
 
+- Update README: document `agent-ping` and
+  `self install`, fix the multi-line claim, point
+  development at `xtask`, refresh the roadmap
+  (2026-08-16)
+- Right-align status-line widgets after a `~` in
+  `--show`, with `--width` and automatic width
+  detection (2026-08-16)
 - Split the status-line widgets into modules by the
   data they read (session, git, system, api_status)
   with shared `format` and `theme` (2026-08-14)

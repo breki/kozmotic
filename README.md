@@ -38,6 +38,23 @@ extract it, then install it to `~/.claude/bin/`:
 ./kozmotic self install
 ```
 
+This copies the binary to `~/.claude/bin/kozmotic` so
+Claude Code hooks and the status line can reference it by
+a stable path:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "~/.claude/bin/kozmotic agent-ping --sound Stop"
+      }
+    ]
+  }
+}
+```
+
 #### Prebuilt platforms
 
 | Archive target | Runs on |
@@ -69,22 +86,6 @@ guides live here:
 - **macOS: the binaries are not signed or notarized.**
   Gatekeeper quarantines them on first run; clear it
   with `xattr -d com.apple.quarantine kozmotic`.
-
-This copies the binary to `~/.claude/bin/kozmotic` so
-Claude Code hooks can reference it directly:
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "type": "command",
-        "command": "~/.claude/bin/kozmotic agent-ping --sound Stop"
-      }
-    ]
-  }
-}
-```
 
 ### From source (development)
 
@@ -124,9 +125,41 @@ kozmotic status-line \
   --separator " | "
 ```
 
-`--show` defaults to `model,context,cost`; `--separator`
-defaults to `" | "`. Use a newline in the separator for a
-multi-line status bar.
+| Flag | Purpose | Default |
+|------|---------|---------|
+| `--show` | Widget layout (see below) | `model,context,cost` |
+| `--separator` | Text between widgets | `" \| "` |
+| `--width` | Columns to right-align against | `COLUMNS`, else the terminal width, else 80 |
+
+#### Layout
+
+The `--show` value is a small layout language:
+
+- `,` separates widgets within a group.
+- `;` starts a new line of the status bar.
+- `~` splits a line: widgets after it are pushed to the
+  right edge.
+
+```bash
+kozmotic status-line --show 'git-branch,git-files~cost,rate-limit'
+```
+
+```
+main | git 5mod 1new                cost $1.23 | 5h 31% (→19:00)
+```
+
+Padding is measured in display columns, so ANSI colours
+and double-width characters do not skew the alignment.
+When a line is too wide to fit, the groups are separated
+by a single space instead of being truncated — an
+overlong line wraps, whereas a truncated one could leave
+the terminal stuck in a colour.
+
+Right-alignment needs to know the terminal width. Claude
+Code pipes the command's output, so `--width` is resolved
+from the flag first, then the `COLUMNS` environment
+variable, then the controlling terminal, then 80. Pass
+`--width` explicitly if the result looks off.
 
 Wire it up in `settings.json` (or run
 `/statusline-setup`):
@@ -135,7 +168,7 @@ Wire it up in `settings.json` (or run
 {
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/bin/kozmotic status-line --show model,context,cost,git-branch"
+    "command": "~/.claude/bin/kozmotic status-line --show 'host,ram,disk;model,context~cost,rate-limit'"
   }
 }
 ```
@@ -196,6 +229,49 @@ cached. Failed lookups are retried at most every 30
 seconds, and each request is capped at 2.5 seconds so a
 status-page outage cannot stall the status line.
 
+### `agent-ping`
+
+Plays a notification sound. Built for Claude Code hooks,
+where an audible cue tells you a long run has finished or
+needs input.
+
+```bash
+kozmotic agent-ping --sound Stop        # built-in preset
+kozmotic agent-ping --file chime.wav    # your own audio
+kozmotic agent-ping --frequency 440     # generated tone
+kozmotic agent-ping --list              # list presets
+```
+
+Presets are named after the hook events they serve:
+`Stop`, `StopFailure`, and `Notification`. Preset names
+are matched case-insensitively.
+
+| Flag | Purpose | Default |
+|------|---------|---------|
+| `--volume` | Playback volume, 0.0–1.0 | `0.5` |
+| `--repeat` | Play N times | `1` |
+| `--interval` | Gap between repeats, ms | `100` |
+| `--duration` | Tone length, ms (`--frequency` only) | `200` |
+| `--dry-run` | Report what would play, make no sound | off |
+
+Supported file formats: WAV, MP3, Ogg Vorbis, and FLAC.
+
+**Muting.** If `~/.claude/.mute-sounds` exists, playback
+is skipped silently and the command still succeeds — so a
+muted machine never breaks a hook. The `/sound` skill
+toggles that file.
+
+### `self install`
+
+```bash
+kozmotic self install                    # ~/.claude/bin/
+kozmotic self install --target-dir /opt  # somewhere else
+```
+
+Copies the running binary to the target directory and
+makes it executable, giving hooks and the status line a
+stable path that survives rebuilds.
+
 ## Output Format
 
 All tools output JSON by default:
@@ -207,23 +283,34 @@ All tools output JSON by default:
   "metadata": {
     "timestamp": "2026-02-15T20:00:00Z",
     "tool": "example",
-    "version": "0.1.0"
+    "version": "1.2.1"
   }
 }
 ```
 
+Pass `--format human` for readable output instead.
+`status-line` is the exception: it renders a status bar
+line rather than an envelope, since Claude Code consumes
+its stdout directly.
+
 ## Development
 
+Build tasks go through the `xtask` crate rather than raw
+cargo commands, so the same checks run locally and in CI:
+
 ```bash
-# Build
-cargo build
-
-# Run tests
-cargo test
-
-# Run locally
-cargo run -- --help
+cargo xtask check       # fast compile check
+cargo xtask test        # tests only
+cargo xtask clippy      # lints only
+cargo xtask fmt         # format the code
+cargo xtask validate    # fmt + clippy + tests + coverage
+cargo xtask coverage    # coverage only (>= 90%)
 ```
+
+`cargo xtask validate` is the acceptance gate: formatting,
+`-D warnings` clippy, the full test suite, and a 90% line
+coverage floor (85% per module). On Windows, `.\build.ps1
+validate` wraps the same pipeline.
 
 ## Contributing
 
@@ -236,13 +323,23 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Roadmap
 
-- [ ] Core CLI framework
+Shipped:
+
+- [x] Core CLI framework with structured JSON output
+- [x] Sound notifications for hooks (`agent-ping`)
+- [x] Claude Code status line (`status-line`)
+- [x] Self-installation (`self install`)
+
+Ideas, not commitments:
+
 - [ ] File system operations tool
 - [ ] Process management tool
 - [ ] Network utilities
 - [ ] Git operations tool
 - [ ] Data transformation tools
 - [ ] CI/CD integrations
+
+`TODO.md` tracks what is actually queued next.
 
 ## Why Kozmotic?
 
