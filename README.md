@@ -112,6 +112,7 @@ kozmotic <tool-name> [OPTIONS]
 | `kozmotic example` | Reference subcommand for new tools |
 | `kozmotic agent-ping` | Play notification sounds (presets, files, tones) |
 | `kozmotic status-line` | Format Claude Code session JSON for the status bar |
+| `kozmotic sessions prompts` | List a session's user prompts from the transcript store |
 | `kozmotic self install` | Install the binary into `~/.claude/bin/` |
 
 ### `status-line`
@@ -261,6 +262,59 @@ is skipped silently and the command still succeeds — so a
 muted machine never breaks a hook. The `/sound` skill
 toggles that file.
 
+### `sessions prompts`
+
+Lists the prompts you sent in a Claude Code session,
+read from the transcripts Claude Code keeps under
+`~/.claude/projects/` (or `$CLAUDE_CONFIG_DIR`).
+
+```bash
+kozmotic sessions prompts                    # this session
+kozmotic sessions prompts --limit 10         # the last 10
+kozmotic sessions prompts --no-commands      # typed text only
+kozmotic sessions prompts --session <id>     # a specific one
+kozmotic sessions prompts --project ~/other  # another project
+```
+
+With no arguments it reads the session it is running
+inside, taken from the `CLAUDE_CODE_SESSION_ID` that
+Claude Code exports to every command it spawns — so an
+agent can inspect its own transcript without being told
+where it lives. Outside a session it falls back to the
+current project's most recently modified transcript.
+
+A transcript's `user` records cover far more than user
+input: tool results, replayed system notices, and the
+local-command plumbing behind slash commands all carry
+the same label. Only what you actually typed is kept.
+Slash commands are kept too, tagged `kind: "command"`
+with the command in its own field:
+
+```json
+{
+  "index": 14,
+  "kind": "command",
+  "text": "",
+  "command": "/release",
+  "timestamp": "2026-08-14T20:32:11.004Z",
+  "git_branch": "main"
+}
+```
+
+`index` numbers a prompt within its session and counts
+commands whether or not they are shown, so it identifies
+the same prompt under any combination of filters.
+`--limit` trims the listing without renumbering it.
+
+Human output is one row per prompt, with multi-line
+prompts shown by their first line:
+
+```
+  13  2026-08-14T20:31  Go
+  14  2026-08-14T20:32  /release
+  16  2026-08-16T05:30  What are those two todos?
+```
+
 ### `self install`
 
 ```bash
@@ -328,6 +382,7 @@ Shipped:
 - [x] Core CLI framework with structured JSON output
 - [x] Sound notifications for hooks (`agent-ping`)
 - [x] Claude Code status line (`status-line`)
+- [x] Session transcript queries (`sessions prompts`)
 - [x] Self-installation (`self install`)
 
 Ideas, not commitments:

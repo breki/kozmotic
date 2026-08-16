@@ -1108,3 +1108,227 @@ fn test_self_install_creates_binary() {
     assert!(dir.join(binary_name).exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- sessions prompts tests ---
+
+/// The project path our fixture transcripts are recorded under, and
+/// the directory name Claude Code would give it.
+const FIXTURE_PROJECT: &str = "/fixture/project";
+const FIXTURE_SLUG: &str = "-fixture-project";
+
+fn record(kind: &str, content: &str, extra: &str) -> String {
+    format!(
+        r#"{{"type":"{kind}","uuid":"u","timestamp":"2026-08-14T19:00:00Z",{extra}"message":{{"role":"user","content":{}}}}}"#,
+        serde_json::to_string(content).unwrap()
+    )
+}
+
+/// A config dir holding one project with one transcript, laid out
+/// exactly as Claude Code lays out its own storage.
+fn fixture_store(session: &str) -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("projects").join(FIXTURE_SLUG);
+    std::fs::create_dir_all(&dir).unwrap();
+    let lines = [
+        record(
+            "user",
+            "<local-command-caveat>skip me</local-command-caveat>",
+            r#""isMeta":true,"#,
+        ),
+        record("user", "<command-name>/commit</command-name>", ""),
+        record("user", "first real prompt", ""),
+        record("assistant", "not user input", ""),
+        record("user", "second real prompt\nwith a second line", ""),
+    ];
+    std::fs::write(
+        dir.join(format!("{session}.jsonl")),
+        lines.join("\n") + "\n",
+    )
+    .unwrap();
+    root
+}
+
+/// A command pointed at the fixture store, with the ambient session
+/// id removed so tests do not inherit the real one when run under
+/// Claude Code.
+fn prompts_cmd(store: &tempfile::TempDir) -> assert_cmd::Command {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("CLAUDE_CONFIG_DIR", store.path())
+        .env_remove("CLAUDE_CODE_SESSION_ID");
+    cmd
+}
+
+#[test]
+fn test_sessions_prompts_json() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args(["sessions", "prompts", "--project", FIXTURE_PROJECT])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"status\": \"success\""))
+        .stdout(predicate::str::contains("\"tool\": \"sessions-prompts\""))
+        .stdout(predicate::str::contains("\"session_id\": \"sess-1\""))
+        .stdout(predicate::str::contains("\"count\": 3"))
+        .stdout(predicate::str::contains("first real prompt"))
+        .stdout(predicate::str::contains("\"command\": \"/commit\""))
+        .stdout(predicate::str::contains("skip me").not());
+}
+
+#[test]
+fn test_sessions_prompts_human_elides_extra_lines() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args([
+            "--format",
+            "human",
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/commit"))
+        .stdout(predicate::str::contains("first real prompt"))
+        .stdout(predicate::str::contains("(+1 lines)"))
+        .stdout(predicate::str::contains("status").not());
+}
+
+#[test]
+fn test_sessions_prompts_no_commands() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args([
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+            "--no-commands",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"count\": 2"))
+        .stdout(predicate::str::contains("/commit").not());
+}
+
+#[test]
+fn test_sessions_prompts_limit_keeps_the_latest() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args([
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+            "--limit",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"count\": 1"))
+        .stdout(predicate::str::contains("second real prompt"))
+        .stdout(predicate::str::contains("first real prompt").not())
+        // --limit trims the listing but does not renumber it.
+        .stdout(predicate::str::contains("\"index\": 3"));
+}
+
+#[test]
+fn test_sessions_prompts_uses_ambient_session_id() {
+    let store = fixture_store("sess-1");
+    // No --session: the id comes from the environment, the way it
+    // does for a command Claude Code runs inside a session.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("CLAUDE_CONFIG_DIR", store.path())
+        .env("CLAUDE_CODE_SESSION_ID", "sess-1")
+        .args(["sessions", "prompts", "--project", "/somewhere/else"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"session_id\": \"sess-1\""));
+}
+
+#[test]
+fn test_sessions_prompts_explicit_session_wins() {
+    let store = fixture_store("sess-1");
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("CLAUDE_CONFIG_DIR", store.path())
+        .env("CLAUDE_CODE_SESSION_ID", "not-this-one")
+        .args([
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+            "--session",
+            "sess-1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"session_id\": \"sess-1\""));
+}
+
+#[test]
+fn test_sessions_prompts_unknown_session() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args([
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+            "--session",
+            "nope",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("SESSION_NOT_FOUND"));
+}
+
+#[test]
+fn test_sessions_prompts_project_without_sessions() {
+    let store = fixture_store("sess-1");
+    prompts_cmd(&store)
+        .args([
+            "--format",
+            "human",
+            "sessions",
+            "prompts",
+            "--project",
+            "/no/such/project",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("NO_SESSIONS"));
+}
+
+#[test]
+fn test_sessions_prompts_without_storage() {
+    let empty = tempfile::tempdir().unwrap();
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("CLAUDE_CONFIG_DIR", empty.path())
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .args(["sessions", "prompts", "--project", FIXTURE_PROJECT])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("NO_STORAGE"));
+}
+
+#[test]
+fn test_sessions_prompts_empty_session_reports_none() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("projects").join(FIXTURE_SLUG);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("blank.jsonl"), "").unwrap();
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.env("CLAUDE_CONFIG_DIR", root.path())
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .args([
+            "--format",
+            "human",
+            "sessions",
+            "prompts",
+            "--project",
+            FIXTURE_PROJECT,
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No prompts in session blank"));
+}

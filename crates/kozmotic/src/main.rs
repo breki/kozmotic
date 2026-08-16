@@ -1,6 +1,7 @@
 mod agent_ping;
 mod output;
 mod self_install;
+mod sessions;
 mod status_line;
 
 use std::path::PathBuf;
@@ -11,6 +12,7 @@ use clap::{Args, Parser, Subcommand};
 use agent_ping::{AgentPingArgs, handle_agent_ping};
 use output::OutputFormat;
 use self_install::handle_self_install;
+use sessions::{PromptsArgs, handle_prompts};
 use status_line::{StatusLineArgs, handle_status_line};
 
 #[derive(Parser)]
@@ -37,6 +39,9 @@ enum Commands {
     /// Manage the kozmotic installation
     #[command(name = "self", subcommand)]
     Self_(SelfCommands),
+    /// Query Claude Code's session transcripts on disk
+    #[command(subcommand)]
+    Sessions(SessionCommands),
     /// Format Claude Code session data for the status line
     #[command(name = "status-line")]
     StatusLine {
@@ -101,6 +106,32 @@ enum SelfCommands {
     Install(SelfInstallArgs),
 }
 
+#[derive(Subcommand)]
+enum SessionCommands {
+    /// List the prompts the user sent in a session
+    Prompts(SessionPromptsArgs),
+}
+
+#[derive(Args)]
+struct SessionPromptsArgs {
+    /// Session id to read (default: the current session, else the
+    /// project's most recent one)
+    #[arg(long)]
+    session: Option<String>,
+
+    /// Project directory whose sessions to search (default: cwd)
+    #[arg(long)]
+    project: Option<PathBuf>,
+
+    /// Show only the last N prompts
+    #[arg(long)]
+    limit: Option<usize>,
+
+    /// Omit slash-command invocations
+    #[arg(long)]
+    no_commands: bool,
+}
+
 #[derive(Args)]
 struct SelfInstallArgs {
     /// Override the install directory
@@ -143,6 +174,17 @@ fn main() -> ExitCode {
         }),
         Some(Commands::Self_(SelfCommands::Install(args))) => {
             handle_self_install(&cli.format, args.target_dir)
+        }
+        Some(Commands::Sessions(SessionCommands::Prompts(args))) => {
+            handle_prompts(
+                &cli.format,
+                PromptsArgs {
+                    session: args.session,
+                    project: args.project,
+                    limit: args.limit,
+                    no_commands: args.no_commands,
+                },
+            )
         }
         Some(Commands::AgentPing {
             sound,

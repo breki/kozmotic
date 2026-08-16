@@ -28,6 +28,7 @@ commands.
 | `kozmotic example` | Reference subcommand for new tools |
 | `kozmotic agent-ping` | Play notification sounds (presets, files, tones) |
 | `kozmotic status-line` | Format Claude Code session JSON for the status bar |
+| `kozmotic sessions prompts` | List a session's user prompts from the transcript store |
 | `kozmotic self install` | Install the binary into `~/.claude/bin/` |
 
 ### Workspace Crates

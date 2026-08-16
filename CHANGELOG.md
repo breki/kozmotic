@@ -10,6 +10,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `sessions prompts` lists the prompts a user sent in a
+  Claude Code session, read from the transcripts under
+  `~/.claude/projects/` (or `$CLAUDE_CONFIG_DIR`). Tool
+  results, replayed system notices, and local-command
+  plumbing are filtered out; slash commands are kept and
+  tagged `kind: "command"`.
+- With no arguments it reads the session it is running
+  inside, taken from `CLAUDE_CODE_SESSION_ID`, so an
+  agent can inspect its own transcript. Failing that it
+  falls back to the current project's most recent
+  session. `--session`, `--project`, `--limit`, and
+  `--no-commands` narrow the result.
+
 ## [1.3.0] - 2026-08-16
 
 ### Added

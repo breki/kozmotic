@@ -2,6 +2,9 @@
 
 ## Done
 
+- Add `sessions prompts`: read Claude Code's transcript
+  store and list a session's user prompts, defaulting to
+  the session the command runs inside (2026-08-16)
 - Update README: document `agent-ping` and
   `self install`, fix the multi-line claim, point
   development at `xtask`, refresh the roadmap
