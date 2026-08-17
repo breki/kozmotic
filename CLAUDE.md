@@ -122,16 +122,39 @@ two do not drift.
   sections, redundant summaries, or boilerplate. This
   applies to files written to disk -- reports, Markdown
   documents, summaries -- as well as to replies.
+- **State things literally.** Do not use a metaphor where a
+  plain sentence exists. The reader has to translate the
+  image back before learning anything, and the plain version
+  is usually shorter. Faults and their fixes:
+  "the rule pushes in the same direction the model already
+  leans" -> "the rule says to talk more, and the model
+  already talks too much";
+  "updates only on a real finding" -> "tell the user when
+  you find something that changes the work";
+  "a rule that corrected an old default can become an
+  amplifier of a new one" -> "a rule written to fix an old
+  model's weakness can make a new model's excess worse".
+  The same fault appears as abstract nouns standing in for
+  actions -- "narration", "verification", "a finding". Name
+  who does what instead. If a sentence has to be decoded
+  before it informs, rewrite it.
 - **Write plainly.** One idea per sentence; lead with the
   concrete example, then the rule; prefer plain words
   ("reminder" over "forcing function", "try again" over
   "iterate"); name the subject rather than leaning on "the
   first"/"the latter". Showy phrasing looks crisp but slows
   the reader.
-- **Narrate the work as it happens.** Before each meaningful
-  tool call or step, say in one short sentence what is about
-  to happen and why. Do not batch silently and only speak at
-  the end -- a run of silent tool calls reads as "lost".
+- **Narrate sparingly.** Before the first tool call, say in
+  one sentence what you are about to do. After that, give an
+  update only when you find something important or change
+  direction. When you finish, lead with the outcome: the
+  first sentence answers "what happened" or "what did you
+  find", with detail after it. Do not announce every step;
+  Claude Opus 5 already narrates more than earlier models,
+  and an instruction to narrate makes it worse rather than
+  better. The original concern -- that a long run of silent
+  tool calls reads as "lost" -- is covered by the opening
+  sentence and the updates on real findings.
 - **Lead with context before a decision-making question, and
   show concrete artifacts** -- for a technical choice (CLI
   shape, JSON schema, data layout), write out what each
