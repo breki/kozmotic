@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-17
+
 ### Added
 
 - status-line: `env:VAR` widget rendering the value of an environment variable,
