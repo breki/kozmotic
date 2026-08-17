@@ -51,9 +51,29 @@ not local.
   `BACKFEED_LEDGER_REL`, `temp_scratch`) and the build fails
   outright. The workaround is ten `#[allow(dead_code)]`
   attributes, which is local drift that the next sync has to
-  work around. **Suggested fix:** put `#![allow(dead_code)]` at
-  the top of `helpers.rs` upstream, or split it so each
-  helper sits with its consumer.
+  work around.
+
+  Worse, one of those helpers,
+  `is_reparse_or_symlink_meta`, uses `windows_sys` behind
+  `#[cfg(windows)]`, so `helpers.rs` also needs the
+  `[target.'cfg(windows)'.dependencies]` entry from
+  `xtask/Cargo.toml`. A partial adopter who copies the
+  module list but not that entry gets a Windows-only
+  compile error -- `E0433: cannot find module or crate
+  windows_sys` -- while Linux and macOS build clean. We hit
+  exactly this: it passed every local gate and failed in
+  CI, blocking a release. The dependency is required by a
+  function that the adopting project cannot call, because
+  the module that calls it was not taken.
+
+  **Suggested fix:** move `is_reparse_or_symlink_meta`,
+  `dir_size`, `DirSizeWarning` and `fmt_bytes` into
+  `clean_cache.rs` beside their only consumer, which drops
+  the Windows dependency for anyone not taking that module.
+  Failing that, put `#![allow(dead_code)]` at the top of
+  `helpers.rs` and say plainly in `/template-sync` that
+  `helpers.rs` and the `xtask/Cargo.toml` target section
+  must be taken together.
 
 - **`validate.rs` cannot be adopted piecemeal.** It hard-codes
   `use crate::{audit, dep_age, frontend_check, frontend_dupes,

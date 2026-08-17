@@ -88,6 +88,13 @@ and this project adheres to
   values and an invalid one is rejected with a standard message
 ### Fixed
 
+- The Windows build failed to compile. `xtask`'s
+  `helpers.rs` uses `windows_sys` behind `#[cfg(windows)]`,
+  but the matching `[target.'cfg(windows)'.dependencies]`
+  entry was missed when the template's xtask was synced.
+  Linux and macOS were unaffected, so it only surfaced in
+  CI. Verified by cross-compiling the workspace to
+  `x86_64-pc-windows-gnu`.
 - sessions prompts rejected a path-shaped --session: the id went straight into a
   filename, and Path::join neither normalises .. nor resists an absolute
   argument, so any readable *.jsonl on the machine could be dumped. Session ids
