@@ -50,6 +50,10 @@ Give each spawn:
    **Description**, **Impact / Why it matters**, **Suggested
    fix**.
 
+**Then end the turn.** Both agents report back through a
+completion notification, so waiting costs nothing: do not
+poll them, do not `sleep`, and do not arm a `Monitor`.
+
 **Diff handoff.** Never write the diff to `/tmp` (on Windows +
 Git Bash that resolves outside the workspace and is invisible to
 the user). `red-team` reads it via `git diff --cached`;

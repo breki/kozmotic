@@ -55,6 +55,11 @@ cargo xtask todo              # list/add/done TODO items
 Never use raw `cargo test` or `cargo clippy` -- always
 go through `xtask`.
 
+Run `cargo xtask fmt` before `cargo xtask validate`.
+Validate only *checks* formatting (`cargo fmt --check`), so
+freshly written code that rustfmt would reflow fails at step
+1 of 4 and the whole run has to be repeated.
+
 ### PowerShell Build Script
 
 ```powershell

@@ -169,17 +169,16 @@ outputs a formatted status bar line. Configured in
 }
 ```
 
-Available widgets:
+The widget names live in one place: the table under
+**Widgets** in `README.md`. Read it rather than copying rows
+here -- a partial list drifts silently every time a widget is
+added.
 
-| Widget | Output |
-|--------|--------|
-| `model` | Model display name |
-| `context` | Context % (color-coded) |
-| `cost` | Session cost in USD |
-| `lines` | Lines added/removed |
-| `rate-limit` | 5-hour rate limit % |
-| `vim` | Vim mode (NORMAL/INSERT) |
-| `env:VAR[:label]` | Value of an environment variable |
+Widgets are grouped into modules by the data they read
+(`status_line/session.rs`, `git.rs`, `system.rs`,
+`env_var.rs`, `api_status.rs`); `render_widget` in
+`status_line.rs` chains those families, and `widget.rs` holds
+the enum every `--show` name parses into.
 
 Flags: `--show` (comma-separated widgets),
 `--separator` (default ` | `).
