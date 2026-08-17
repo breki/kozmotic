@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-17
+
 ### Added
 
 - `sessions prompts` lists the prompts a user sent in a
@@ -43,6 +45,18 @@ and this project adheres to
 
 ### Changed
 
+- **BREAKING:** An unknown widget in `--show` is now
+  reported and exits non-zero, listing the valid names. It
+  previously rendered nothing and exited 0, so a misspelled
+  widget produced a shorter line with no diagnostic
+  anywhere. If `settings.json` contains a stale widget name,
+  the status line will fail after upgrading until the name
+  is corrected.
+- **BREAKING:** The muted agent-ping payload now has the same shape as a real
+  play: a full details object plus muted: true, where it previously emitted a
+  bare sound field that read 'unknown' for a --frequency invocation and omitted
+  details entirely. Consumers reading data.details or data.sound see a
+  consistent shape regardless of mute state
 - Coverage exclusions moved from a hardcoded regex in
   `xtask` to `[workspace.metadata.coverage]` in the root
   `Cargo.toml`, so exempting a hardware-bound module no
@@ -62,9 +76,6 @@ and this project adheres to
   instead of reading the whole file and every prompt into memory first. Cost now
   tracks the longest line rather than the file, which reaches hundreds of
   megabytes on a long session
-- An unknown widget in --show is now reported, listing the valid names, instead
-  of rendering nothing. A misspelled widget previously produced a shorter line
-  with no diagnostic anywhere
 - status-line honours --format on failure and reports a machine-readable code
   (NO_INPUT, INVALID_JSON, UNKNOWN_WIDGET). It was the only subcommand that
   ignored the global flag
@@ -75,12 +86,6 @@ and this project adheres to
   about 70 lines of hand-written offset and civil-date arithmetic
 - The global --format flag is a clap ValueEnum, so --help lists its possible
   values and an invalid one is rejected with a standard message
-- **BREAKING:** The muted agent-ping payload now has the same shape as a real
-  play: a full details object plus muted: true, where it previously emitted a
-  bare sound field that read 'unknown' for a --frequency invocation and omitted
-  details entirely. Consumers reading data.details or data.sound see a
-  consistent shape regardless of mute state
-
 ### Fixed
 
 - sessions prompts rejected a path-shaped --session: the id went straight into a
