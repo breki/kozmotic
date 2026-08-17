@@ -103,8 +103,8 @@ fn indicator_text(indicator: &str) -> (&'static str, &'static str) {
 
 /// Render the `api-status` widget, or `None` for any other name.
 /// Unlike most widgets this never renders empty — see [`ApiHealth`].
-pub fn render(widget: Widget) -> Option<String> {
-    if widget != Widget::ApiStatus {
+pub fn render(widget: &Widget) -> Option<String> {
+    if !matches!(widget, Widget::ApiStatus) {
         return None;
     }
     Some(render_api_health(&io::get_api_status()))
@@ -236,6 +236,6 @@ mod tests {
     #[test]
     fn foreign_widget_name_is_declined() {
         // A widget owned by another family is declined.
-        assert_eq!(render(Widget::Model), None);
+        assert_eq!(render(&Widget::Model), None);
     }
 }

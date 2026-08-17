@@ -275,7 +275,7 @@ impl GitContext {
 
 /// Render a git-backed widget, or `None` when the name belongs to
 /// another family or there is nothing to report.
-pub fn render(widget: Widget, git: &GitContext) -> Option<String> {
+pub fn render(widget: &Widget, git: &GitContext) -> Option<String> {
     match widget {
         Widget::GitBranch => git.branch().map(|b| format!("{CYAN}{b}{RESET}")),
         Widget::GitAhead => {
@@ -419,7 +419,7 @@ R  renamed.rs
     fn foreign_widget_name_is_declined() {
         let git = GitContext::default();
         // A widget owned by another family is declined.
-        assert_eq!(render(Widget::Model, &git), None);
+        assert_eq!(render(&Widget::Model, &git), None);
     }
 
     /// The widget names route to the right renderer. Values depend
@@ -436,8 +436,8 @@ R  renamed.rs
             Widget::LastCommit,
             Widget::GitStatus,
         ] {
-            let first = render(widget, &git);
-            assert_eq!(first, render(widget, &git), "{widget} is not stable");
+            let first = render(&widget, &git);
+            assert_eq!(first, render(&widget, &git), "{widget} is not stable");
         }
     }
 }

@@ -179,6 +179,7 @@ Available widgets:
 | `lines` | Lines added/removed |
 | `rate-limit` | 5-hour rate limit % |
 | `vim` | Vim mode (NORMAL/INSERT) |
+| `env:VAR[:label]` | Value of an environment variable |
 
 Flags: `--show` (comma-separated widgets),
 `--separator` (default ` | `).

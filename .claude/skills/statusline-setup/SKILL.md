@@ -79,6 +79,8 @@ status-line` for the Claude Code status bar.
    | `host` | Machine's short host name | `host devbox` |
    | `ram` | RAM used/installed, colored at 50/80% | `ram 12.4/31.3G` |
    | `disk` | Disk used/total for the session's filesystem | `disk 210/468G` |
+   | `env:VAR` | Value of an environment variable | `bombyx-host` |
+   | `env:VAR:label` | Same, behind a dimmed label | `vm bombyx-host` |
 
    Notes worth passing on when relevant:
    - `cost-rate` is hidden until the session has
@@ -94,6 +96,17 @@ status-line` for the Claude Code status bar.
      means the value is stale because the status page
      was unreachable, `api unknown` means nothing is
      cached.
+   - an `env:VAR:label` label may contain `:` but not
+     `,`, `;` or `~` — the `--show` grammar splits on
+     those first, so a label carrying one is reported
+     as an unknown widget.
+   - `env:VAR` reads the environment of the process
+     Claude Code spawns, so the variable must be
+     exported in the shell Claude Code was launched
+     from. It renders nothing when unset or blank, and
+     the bare form prints the value with no label —
+     suggest `env:VAR:label` when the value alone
+     would not say what it is.
    - `host`, `ram`, and `disk` read local system state
      and cost nothing extra when combined. `disk`
      reports the filesystem holding the session's
@@ -140,10 +153,17 @@ status-line` for the Claude Code status bar.
 
 7. **Build the command string:**
    ```
-   ~/.claude/bin/kozmotic status-line --show <widgets> --separator "<sep>"
+   ~/.claude/bin/kozmotic status-line --show '<widgets>' --separator "<sep>"
    ```
    Omit `--separator` if the user chose the
    default (` | `).
+
+   Single-quote the `--show` value. Claude Code runs
+   this command through a shell, and an `env:VAR:label`
+   label is free text: a space would split the widget
+   list into a stray positional argument, and `$(...)`
+   or a backtick would run on every render. Keep labels
+   to letters, digits and dashes anyway.
 
 8. **Set the `statusLine` field** in settings.json:
    ```json

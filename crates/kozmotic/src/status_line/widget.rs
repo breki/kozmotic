@@ -11,9 +11,16 @@
 //! With one enum, `--show` is validated once at parse time, the
 //! compiler enforces that every family handles every name it claims,
 //! and `None` from a family means only "not mine".
+//!
+//! One widget is parameterised rather than fixed: `env:VAR` names a
+//! variable the operator chooses, so it carries an [`EnvSpec`]
+//! instead of being a bare variant. Everything else here — `ALL`,
+//! `as_str`, the round-trip test — is about the fixed names.
+
+use super::env_var::{EnvSpec, PREFIX as ENV_PREFIX};
 
 /// A widget that can appear in the status line.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Widget {
     // Session payload.
     Model,
@@ -44,10 +51,15 @@ pub enum Widget {
     Disk,
     // External.
     ApiStatus,
+    /// Process environment; parameterised — see [`EnvSpec`].
+    Env(EnvSpec),
 }
 
 impl Widget {
-    /// Every widget, in the order they are documented.
+    /// Every fixed widget, in the order they are documented.
+    ///
+    /// `Env` is absent by construction: there is no finite list of
+    /// environment variables to enumerate.
     pub const ALL: &'static [Widget] = &[
         Widget::Model,
         Widget::Context,
@@ -76,8 +88,15 @@ impl Widget {
         Widget::ApiStatus,
     ];
 
-    pub fn as_str(self) -> &'static str {
-        match self {
+    /// The `--show` name of a fixed widget, or `None` for `Env`.
+    ///
+    /// `Env` has no static name — its spelling depends on the
+    /// variable it was given, so [`std::fmt::Display`] is what
+    /// renders it in full. Returning `None` rather than a stand-in
+    /// keeps the invariant that whatever this yields parses back into
+    /// the same widget.
+    pub fn as_str(&self) -> Option<&'static str> {
+        Some(match self {
             Widget::Model => "model",
             Widget::Context => "context",
             Widget::Cost => "cost",
@@ -103,13 +122,19 @@ impl Widget {
             Widget::Ram => "ram",
             Widget::Disk => "disk",
             Widget::ApiStatus => "api-status",
-        }
+            Widget::Env(_) => return None,
+        })
     }
 }
 
 impl std::fmt::Display for Widget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
+        match self {
+            Widget::Env(spec) => spec.fmt(f),
+            // Every other variant has a name; `as_str` only declines
+            // for `Env`, which is handled above.
+            fixed => f.write_str(fixed.as_str().unwrap_or_default()),
+        }
     }
 }
 
@@ -120,24 +145,30 @@ pub struct UnknownWidget {
 }
 
 fn valid() -> String {
-    Widget::ALL
-        .iter()
-        .map(|w| w.as_str())
-        .collect::<Vec<_>>()
-        .join(", ")
+    let mut names: Vec<&str> =
+        Widget::ALL.iter().filter_map(Widget::as_str).collect();
+    // Listed last because it is a form rather than a name.
+    names.push("env:VAR[:label]");
+    names.join(", ")
 }
 
 impl std::str::FromStr for Widget {
     type Err = UnknownWidget;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let unknown = || UnknownWidget {
+            name: s.to_string(),
+        };
+        // `env:` claims the whole prefix, so a malformed one is a
+        // typo rather than a name some other family might own.
+        if s.starts_with(ENV_PREFIX) {
+            return EnvSpec::parse(s).map(Widget::Env).ok_or_else(unknown);
+        }
         Widget::ALL
             .iter()
-            .copied()
-            .find(|w| w.as_str() == s)
-            .ok_or_else(|| UnknownWidget {
-                name: s.to_string(),
-            })
+            .find(|w| w.as_str() == Some(s))
+            .cloned()
+            .ok_or_else(unknown)
     }
 }
 
@@ -148,19 +179,43 @@ mod tests {
     #[test]
     fn every_variant_round_trips_through_its_name() {
         for widget in Widget::ALL {
-            let parsed: Widget = widget.as_str().parse().unwrap();
-            assert_eq!(parsed, *widget, "{widget}");
+            let name = widget.as_str().expect("a fixed widget has a name");
+            assert_eq!(name.parse::<Widget>().unwrap(), *widget, "{widget}");
+            assert_eq!(widget.to_string(), name, "{widget}");
         }
     }
 
     #[test]
     fn all_lists_every_variant_exactly_once() {
         let mut names: Vec<_> =
-            Widget::ALL.iter().map(|w| w.as_str()).collect();
+            Widget::ALL.iter().filter_map(Widget::as_str).collect();
+        assert_eq!(
+            names.len(),
+            Widget::ALL.len(),
+            "a fixed widget has no name"
+        );
         let count = names.len();
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), count, "duplicate entry in Widget::ALL");
+    }
+
+    #[test]
+    fn an_env_name_parses_into_its_spec() {
+        let widget: Widget = "env:VMHOST:vm".parse().unwrap();
+        assert_eq!(widget.to_string(), "env:VMHOST:vm");
+        assert!(matches!(widget, Widget::Env(_)));
+        // It has no fixed name, and `Display` is what spells it out.
+        assert_eq!(widget.as_str(), None);
+    }
+
+    #[test]
+    fn a_malformed_env_name_is_rejected() {
+        // Not "declined and tried elsewhere": nothing else owns the
+        // prefix, so falling through would report a confusing error.
+        let err = "env:".parse::<Widget>().unwrap_err();
+        assert_eq!(err.name, "env:");
+        assert!(err.to_string().contains("env:VAR"), "{err}");
     }
 
     #[test]

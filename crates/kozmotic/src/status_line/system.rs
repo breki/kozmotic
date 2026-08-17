@@ -158,7 +158,7 @@ fn render_usage(lbl: &str, usage: Usage) -> String {
 
 /// Render a host-backed widget, or `None` when the name belongs to
 /// another family or the platform reports nothing.
-pub fn render(widget: Widget, sys: &SystemContext) -> Option<String> {
+pub fn render(widget: &Widget, sys: &SystemContext) -> Option<String> {
     match widget {
         Widget::Host => {
             sys.host_name().map(|h| format!("{} {h}", label("host")))
@@ -380,7 +380,7 @@ mod tests {
     fn host_widgets_render_on_this_machine() {
         let sys = SystemContext::new(PathBuf::from("."));
         for widget in [Widget::Host, Widget::Ram, Widget::Disk] {
-            let out = render(widget, &sys)
+            let out = render(&widget, &sys)
                 .unwrap_or_else(|| panic!("{widget} should render"));
             assert!(!out.is_empty());
         }
@@ -390,7 +390,7 @@ mod tests {
     fn foreign_widget_name_is_declined() {
         let sys = SystemContext::new(PathBuf::from("."));
         // A widget owned by another family is declined.
-        assert_eq!(render(Widget::Model, &sys), None);
+        assert_eq!(render(&Widget::Model, &sys), None);
     }
 
     #[test]

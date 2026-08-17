@@ -2,13 +2,15 @@
 //! stdin and render the configured widgets.
 //!
 //! Widgets are grouped into modules by the data they read — session
-//! payload, git, host, API health — and each module declines names it
-//! does not own, so [`render_widget`] is a chain of those families.
+//! payload, git, host, process environment, API health — and each
+//! module declines widgets it does not own, so [`render_widget`] is a
+//! chain of those families.
 
 use std::io::Read;
 use std::process::ExitCode;
 
 mod api_status;
+mod env_var;
 mod format;
 mod git;
 mod layout;
@@ -106,7 +108,7 @@ pub fn handle_status_line(
         let render = |widgets: &[Widget]| -> Vec<String> {
             widgets
                 .iter()
-                .filter_map(|w| render_widget(*w, &data, &git, &sys))
+                .filter_map(|w| render_widget(w, &data, &git, &sys))
                 .collect()
         };
         let left = render(&spec.left);
@@ -136,7 +138,7 @@ fn fail(format: OutputFormat, err: &StatusLineError) -> ExitCode {
 /// families, so the first `Some` wins and an unknown name falls
 /// through to `None`, which the caller skips.
 fn render_widget(
-    widget: Widget,
+    widget: &Widget,
     data: &SessionData,
     git: &GitContext,
     sys: &SystemContext,
@@ -144,6 +146,8 @@ fn render_widget(
     session::render(widget, data)
         .or_else(|| git::render(widget, git))
         .or_else(|| system::render(widget, sys))
+        .or_else(|| env_var::render(widget))
+        // Last: the only family that may touch the network.
         .or_else(|| api_status::render(widget))
 }
 
@@ -164,8 +168,10 @@ mod tests {
     fn dispatch_reaches_each_family() {
         let (data, git, sys) = contexts();
         // One widget per family that always renders on any machine.
-        for widget in [Widget::Cost, Widget::GitFiles, Widget::Ram] {
-            let out = render_widget(widget, &data, &git, &sys)
+        // PATH is set on every platform kozmotic targets.
+        let env: Widget = "env:PATH".parse().expect("valid widget");
+        for widget in [Widget::Cost, Widget::GitFiles, Widget::Ram, env] {
+            let out = render_widget(&widget, &data, &git, &sys)
                 .unwrap_or_else(|| panic!("{widget} should render"));
             assert!(!out.is_empty(), "{widget}");
         }
@@ -181,23 +187,28 @@ mod tests {
     #[test]
     fn every_widget_is_claimed_by_a_family() {
         let (data, git, sys) = contexts();
-        let owners = |w: Widget| {
+        let owners = |w: &Widget| {
             [
                 session::render(w, &data).is_some(),
                 git::render(w, &git).is_some(),
                 system::render(w, &sys).is_some(),
+                env_var::render(w).is_some(),
             ]
             .iter()
             .filter(|claimed| **claimed)
             .count()
         };
-        for widget in Widget::ALL {
+        // `Widget::ALL` holds only the fixed names, so the env
+        // family has to be appended by hand or it goes unchecked —
+        // three families absorb it in a `_ => None` arm today.
+        let env: Widget = "env:PATH".parse().expect("valid widget");
+        for widget in Widget::ALL.iter().chain(std::iter::once(&env)) {
             // `api-status` reaches the network; the rest must be
             // claimed by at most one local family.
             if *widget == Widget::ApiStatus {
                 continue;
             }
-            assert!(owners(*widget) <= 1, "{widget} claimed by two families");
+            assert!(owners(widget) <= 1, "{widget} claimed by two families");
         }
     }
 }

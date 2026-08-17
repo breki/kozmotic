@@ -207,6 +207,23 @@ session field costs nothing.
 | `host` | Machine's short host name | `host devbox` |
 | `ram` | RAM used/installed, colored at 50/80% | `ram 12.4/31.3G` |
 | `disk` | Disk used/total for the session's filesystem | `disk 210/468G` |
+| `env:VAR` | Value of an environment variable | `bombyx-host` |
+| `env:VAR:label` | Same, behind a dimmed label | `vm bombyx-host` |
+
+`env:VAR` shows a value kozmotic knows nothing about — the
+VM a session runs on, a deployment target, a cluster name.
+The variable has to be visible to the process Claude Code
+spawns, so export it in the shell you launch Claude Code
+from; setting it afterwards or in another terminal does
+nothing. When the widget renders nothing, check
+`echo $VAR` in that same shell first. An unset or blank
+variable renders nothing at all; `env:` with no variable
+name is rejected like any other misspelt widget. Control
+characters in the value are stripped and the value is
+capped at 120 characters, so a stray escape sequence
+cannot recolour the bar. A label may contain `:`, but not
+`,`, `;` or `~` — the `--show` grammar claims those
+first.
 
 All `git-*` widgets share a per-render cache, so each
 underlying `git` command runs at most once regardless of

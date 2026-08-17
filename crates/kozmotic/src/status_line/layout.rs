@@ -204,6 +204,17 @@ mod tests {
     }
 
     #[test]
+    fn an_env_label_cannot_contain_a_widget_separator() {
+        // `--show` claims "," , ";" and "~" before the env parser
+        // sees them, so a label carrying one splits into fragments
+        // and the leftover is reported as the unknown widget.
+        let err = LineSpec::parse("env:V:a,b").unwrap_err();
+        assert_eq!(err.name, "b");
+        let err = LineSpec::parse("env:V:a~b").unwrap_err();
+        assert_eq!(err.name, "b");
+    }
+
+    #[test]
     fn parse_rejects_an_unknown_widget() {
         let err = LineSpec::parse("model,contxt").unwrap_err();
         assert_eq!(err.name, "contxt");

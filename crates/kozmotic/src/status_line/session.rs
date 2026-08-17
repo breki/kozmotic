@@ -161,7 +161,7 @@ fn render_rate_limit(
 
 /// Render a session-backed widget, or `None` when the name belongs to
 /// another family or the widget has nothing to say.
-pub fn render(widget: Widget, data: &SessionData) -> Option<String> {
+pub fn render(widget: &Widget, data: &SessionData) -> Option<String> {
     match widget {
         Widget::Model => {
             if data.model.display_name.is_empty() {
@@ -340,20 +340,20 @@ mod tests {
             Widget::Directory,
             Widget::Session,
         ] {
-            assert_eq!(render(widget, &data), None, "{widget}");
+            assert_eq!(render(&widget, &data), None, "{widget}");
         }
     }
 
     #[test]
     fn cost_rate_hidden_until_session_has_duration() {
         let data = SessionData::default();
-        assert_eq!(render(Widget::CostRate, &data), None);
+        assert_eq!(render(&Widget::CostRate, &data), None);
     }
 
     #[test]
     fn foreign_widget_name_is_declined() {
         let data = SessionData::default();
         // A widget owned by another family is declined.
-        assert_eq!(render(Widget::GitBranch, &data), None);
+        assert_eq!(render(&Widget::GitBranch, &data), None);
     }
 }

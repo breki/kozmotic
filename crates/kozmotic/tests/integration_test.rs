@@ -431,6 +431,38 @@ fn test_status_line_api_status() {
         );
 }
 
+#[test]
+fn test_status_line_env_widget() {
+    // The whole path from `--show` to stdout, including the bit only
+    // a child process can prove: the variable is read from the
+    // environment kozmotic is launched with.
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("env:KOZMOTIC_TEST_VM_HOST:vm,env:KOZMOTIC_TEST_UNSET")
+        .env("KOZMOTIC_TEST_VM_HOST", "bombyx-host")
+        .env_remove("KOZMOTIC_TEST_UNSET")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bombyx-host"))
+        // The unset widget must contribute nothing at all — not an
+        // empty slot, and so not a second separator either.
+        .stdout(predicate::str::contains("|").not());
+}
+
+#[test]
+fn test_status_line_env_widget_without_a_variable_name_fails() {
+    let mut cmd = cargo_bin_cmd!("kozmotic");
+    cmd.arg("status-line")
+        .arg("--show")
+        .arg("env:")
+        .write_stdin(SAMPLE_STATUS_JSON)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("UNKNOWN_WIDGET"));
+}
+
 /// Visible columns of a rendered line: ANSI escapes occupy none.
 /// A CSI sequence is `ESC [` then parameters then a final byte in
 /// 0x40..=0x7E — the `[` is in that range too, so skip it first.
