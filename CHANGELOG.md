@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-18
+
 ### Changed
 
 - status-line: `git-ahead` shows a dimmed `(no upstream)` on a branch that
