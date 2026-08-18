@@ -11,7 +11,13 @@ pub const RED: &str = "\x1b[31m";
 
 /// A widget's dimmed prefix, e.g. the `ctx` in `ctx 42.5%`.
 pub fn label(name: &str) -> String {
-    format!("{DIM}{name}{RESET}")
+    dim(name)
+}
+
+/// Dimmed text: a value the reader should notice without it
+/// competing with the numbers, e.g. `git-ahead`'s `(no upstream)`.
+pub fn dim(text: &str) -> String {
+    format!("{DIM}{text}{RESET}")
 }
 
 /// Shared "how full is it" scale: green below half, yellow from half,
@@ -44,5 +50,6 @@ mod tests {
     #[test]
     fn label_is_dimmed_and_reset() {
         assert_eq!(label("ctx"), format!("{DIM}ctx{RESET}"));
+        assert_eq!(dim("(no upstream)"), format!("{DIM}(no upstream){RESET}"));
     }
 }

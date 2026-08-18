@@ -191,7 +191,7 @@ session field costs nothing.
 | `api-duration` | Time spent in API calls | `api 3m 20s` |
 | `tokens` | Input/output tokens, k/M scaled | `tok 1.2M in / 45.0k out` |
 | `git-branch` | Current branch | `main` |
-| `git-ahead` | Commits ahead/behind upstream | `↑2 ↓1` |
+| `git-ahead` | Commits ahead/behind upstream, or a branch that tracks nothing | `↑2 ↓1`, `(no upstream)` |
 | `git-files` | Staged/modified/new/deleted counts | `git 2staged 1mod`, `git (clean)` |
 | `git-lines` | Uncommitted added/deleted lines | `+42/-7` |
 | `last-commit` | Relative age of `HEAD` | `last 12m`, `last 2h 15m`, `last 3d 4h` |
@@ -224,6 +224,16 @@ capped at 120 characters, so a stray escape sequence
 cannot recolour the bar. A label may contain `:`, but not
 `,`, `;` or `~` — the `--show` grammar claims those
 first.
+
+A branch that tracks nothing shows a dimmed
+`(no upstream)`: bare `git push` fails in that state, so
+silence would read as "nothing to push" exactly when there
+is something to push. `git-ahead` is still silent when the
+branch is level with its upstream, and when there is
+nothing it can say truthfully -- outside a repository,
+without `git` installed, on a detached or unborn HEAD, or
+when an upstream is configured but its remote-tracking ref
+is missing locally.
 
 All `git-*` widgets share a per-render cache, so each
 underlying `git` command runs at most once regardless of

@@ -10,6 +10,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- status-line: `git-ahead` shows a dimmed `(no upstream)` on a branch that
+  tracks nothing, instead of rendering nothing and looking the same as a fully
+  pushed branch
+
 ## [2.1.0] - 2026-08-17
 
 ### Added

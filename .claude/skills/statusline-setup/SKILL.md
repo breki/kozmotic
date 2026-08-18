@@ -63,7 +63,7 @@ status-line` for the Claude Code status bar.
    | `api-duration` | Time spent in API calls | `api 3m 20s` |
    | `tokens` | Input/output tokens, k/M scaled | `tok 1.2M in / 45.0k out` |
    | `git-branch` | Current branch, cyan | `main` |
-   | `git-ahead` | Commits ahead/behind upstream | `↑2 ↓1` |
+   | `git-ahead` | Commits ahead/behind upstream, or a branch that tracks nothing | `↑2 ↓1`, `(no upstream)` |
    | `git-files` | Staged/modified/new/deleted counts | `git 2staged 1mod`, `git (clean)` |
    | `git-lines` | Uncommitted added/deleted lines | `+42/-7` |
    | `last-commit` | Relative age of HEAD | `last 12m`, `last 2h 15m`, `last 3d 4h` |
@@ -85,9 +85,16 @@ status-line` for the Claude Code status bar.
    Notes worth passing on when relevant:
    - `cost-rate` is hidden until the session has
      measurable duration.
-   - `git-lines`, `git-status`, and `git-ahead` hide
-     themselves when there is nothing to report, so
-     the separator does not double up.
+   - `git-lines` and `git-status` hide themselves when
+     there is nothing to report, so the separator does
+     not double up.
+   - `git-ahead` shows a dimmed `(no upstream)` on a
+     branch that tracks nothing, because an empty
+     widget there would read as "nothing to push"
+     when `git push` would in fact fail. It stays
+     silent when the branch is level with its
+     upstream, and when it cannot tell -- no
+     repository, no `git`, a detached or unborn HEAD.
    - `rate-limit` and `rate-limit-7d` render whenever
      a reset time is present, even at 0% usage.
    - `api-status` makes an HTTP call (2-minute cache);

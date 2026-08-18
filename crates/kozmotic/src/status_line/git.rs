@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::SystemTime;
 
 use super::format;
-use super::theme::{CYAN, GREEN, RED, RESET, YELLOW, label};
+use super::theme::{CYAN, GREEN, RED, RESET, YELLOW, dim, label};
 use super::widget::Widget;
 
 #[derive(Debug, Default, PartialEq)]
@@ -50,6 +50,25 @@ fn parse_file_counts(stdout: &str) -> GitFileCounts {
         }
     }
     counts
+}
+
+/// Where the current branch stands relative to its upstream.
+///
+/// `Tracked(0, 0)` and `Unknown` both render nothing; `NoUpstream`
+/// renders a dimmed marker. Keeping them apart is the point: a
+/// branch that tracks nothing cannot be pushed by a bare
+/// `git push`, and an empty widget would say the opposite.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SyncState {
+    /// Commits ahead and behind the upstream branch.
+    Tracked(usize, usize),
+    /// The branch exists and has no upstream configured.
+    NoUpstream,
+    /// Anything else: no repository, no `git`, a detached or unborn
+    /// HEAD, or an upstream that is configured but whose
+    /// remote-tracking ref is missing locally. Silent, because the
+    /// widget has nothing it can say truthfully.
+    Unknown,
 }
 
 /// Parse `git rev-list --left-right --count HEAD...@{upstream}`.
@@ -122,6 +141,53 @@ fn render_ahead_behind(ahead: usize, behind: usize) -> Option<String> {
     Some(parts.join(" "))
 }
 
+/// Decide the sync state from what git reported.
+///
+/// `counts` is the parsed `rev-list` output, `upstream` the raw
+/// stdout of `for-each-ref` over the branch's ref — `None` when that
+/// probe was not run or failed.
+///
+/// Pure, so the three classifications are testable without putting
+/// the repository the suite runs in into a particular state.
+fn classify_sync(
+    counts: Option<(usize, usize)>,
+    upstream: Option<&str>,
+) -> SyncState {
+    if let Some((ahead, behind)) = counts {
+        return SyncState::Tracked(ahead, behind);
+    }
+    // `for-each-ref` prints one line per matching ref: the upstream's
+    // short name, or an empty line when the branch tracks nothing.
+    // No line at all means the ref does not exist -- an unborn branch
+    // -- which is not the same as tracking nothing.
+    match upstream.and_then(|out| out.lines().next()) {
+        Some(line) if line.trim().is_empty() => SyncState::NoUpstream,
+        // A named upstream here means `rev-list` failed for some
+        // other reason, most often a configured upstream whose
+        // remote-tracking ref was pruned. That branch *can* be
+        // pushed, so claiming "no upstream" would be wrong.
+        _ => SyncState::Unknown,
+    }
+}
+
+/// Word a sync state for the status line, or `None` when it has
+/// nothing worth saying.
+///
+/// Split from the probing so the decision is a pure function: the
+/// probing depends on the repository the suite happens to run in,
+/// this does not.
+fn ahead_text(sync: SyncState) -> Option<String> {
+    match sync {
+        SyncState::Tracked(ahead, behind) => render_ahead_behind(ahead, behind),
+        // Dim, not red: a branch with no upstream is worth noticing,
+        // not an error. `git push` with no arguments fails in this
+        // state, so an empty widget would be read as "nothing to
+        // push" exactly when there is something to push.
+        SyncState::NoUpstream => Some(dim("(no upstream)")),
+        SyncState::Unknown => None,
+    }
+}
+
 fn render_diff_lines(added: usize, deleted: usize) -> Option<String> {
     if added == 0 && deleted == 0 {
         None
@@ -153,7 +219,7 @@ pub struct GitContext {
     /// working directory, not ours — see [`GitContext::new`].
     dir: Option<PathBuf>,
     branch: OnceCell<Option<String>>,
-    ahead_behind: OnceCell<Option<(usize, usize)>>,
+    sync: OnceCell<SyncState>,
     porcelain: OnceCell<Option<String>>,
     numstat_unstaged: OnceCell<Option<String>>,
     numstat_staged: OnceCell<Option<String>>,
@@ -202,14 +268,43 @@ impl GitContext {
             .as_deref()
     }
 
-    fn ahead_behind(&self) -> Option<(usize, usize)> {
-        *self.ahead_behind.get_or_init(|| {
-            let stdout = run_git(
+    fn sync(&self) -> SyncState {
+        *self.sync.get_or_init(|| self.probe_sync())
+    }
+
+    /// Ask git how the branch stands against its upstream.
+    ///
+    /// Called once per render through [`GitContext::sync`]. A branch
+    /// with an upstream costs one process; one without costs three
+    /// (`rev-list`, then `branch --show-current` and `for-each-ref`
+    /// to tell "tracks nothing" from "cannot tell").
+    fn probe_sync(&self) -> SyncState {
+        let counts = run_git(
+            self.dir(),
+            &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
+        )
+        .as_deref()
+        .and_then(parse_ahead_behind);
+        if counts.is_some() {
+            return classify_sync(counts, None);
+        }
+        // The configuration is probed, not the resolved ref: a
+        // pruned `refs/remotes/...` makes `rev-parse @{upstream}`
+        // fail on a branch that still has an upstream and still
+        // pushes. Git's error text is not matched either -- the
+        // commands that report a missing upstream word it
+        // differently, and the wording is translated.
+        let upstream = self.branch().and_then(|branch| {
+            run_git(
                 self.dir(),
-                &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
-            )?;
-            parse_ahead_behind(&stdout)
-        })
+                &[
+                    "for-each-ref",
+                    "--format=%(upstream:short)",
+                    &format!("refs/heads/{branch}"),
+                ],
+            )
+        });
+        classify_sync(counts, upstream.as_deref())
     }
 
     fn porcelain(&self) -> Option<&str> {
@@ -278,10 +373,7 @@ impl GitContext {
 pub fn render(widget: &Widget, git: &GitContext) -> Option<String> {
     match widget {
         Widget::GitBranch => git.branch().map(|b| format!("{CYAN}{b}{RESET}")),
-        Widget::GitAhead => {
-            let (ahead, behind) = git.ahead_behind()?;
-            render_ahead_behind(ahead, behind)
-        }
+        Widget::GitAhead => ahead_text(git.sync()),
         Widget::GitFiles => Some(render_file_counts(&git.file_counts()?)),
         Widget::GitLines => {
             let (added, deleted) = git.diff_lines()?;
@@ -301,6 +393,8 @@ pub fn render(widget: &Widget, git: &GitContext) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Only the assertion on the dimmed marker needs the raw code.
+    use crate::status_line::theme::DIM;
 
     /// Real `git status --porcelain` output: staged add, staged
     /// modify, unstaged modify, staged-and-unstaged, deletion,
@@ -388,14 +482,67 @@ R  renamed.rs
     }
 
     #[test]
-    fn render_ahead_behind_shows_only_nonzero_sides() {
-        assert_eq!(render_ahead_behind(0, 0), None);
-        let ahead = render_ahead_behind(2, 0).expect("should render");
-        assert!(ahead.contains("↑2") && !ahead.contains("↓"));
-        let behind = render_ahead_behind(0, 3).expect("should render");
-        assert!(behind.contains("↓3") && !behind.contains("↑"));
-        let both = render_ahead_behind(2, 3).expect("should render");
-        assert!(both.contains("↑2") && both.contains("↓3"));
+    fn ahead_text_is_silent_when_in_sync() {
+        // One of the two silent states -- see
+        // `ahead_text_is_silent_when_it_cannot_tell` for the other.
+        assert_eq!(ahead_text(SyncState::Tracked(0, 0)), None);
+    }
+
+    #[test]
+    fn ahead_text_shows_only_the_nonzero_sides() {
+        let ahead = ahead_text(SyncState::Tracked(2, 0)).expect("renders");
+        assert!(ahead.contains("↑2") && !ahead.contains("↓"), "{ahead}");
+        let behind = ahead_text(SyncState::Tracked(0, 3)).expect("renders");
+        assert!(behind.contains("↓3") && !behind.contains("↑"), "{behind}");
+        let both = ahead_text(SyncState::Tracked(2, 1)).expect("renders");
+        assert!(both.contains("↑2") && both.contains("↓1"), "{both}");
+    }
+
+    #[test]
+    fn classify_prefers_the_counts_when_git_answered() {
+        assert_eq!(classify_sync(Some((2, 1)), None), SyncState::Tracked(2, 1));
+        assert_eq!(classify_sync(Some((0, 0)), None), SyncState::Tracked(0, 0));
+    }
+
+    #[test]
+    fn classify_reads_a_blank_upstream_as_tracking_nothing() {
+        // `for-each-ref` printed a line for the branch, and it was
+        // empty: the branch exists and tracks nothing.
+        assert_eq!(classify_sync(None, Some("\n")), SyncState::NoUpstream);
+        assert_eq!(classify_sync(None, Some("")), SyncState::Unknown);
+    }
+
+    #[test]
+    fn classify_stays_silent_when_an_upstream_is_configured() {
+        // rev-list failed but the branch does have an upstream --
+        // typically its remote-tracking ref was pruned. It still
+        // pushes, so "(no upstream)" would be a lie.
+        let out = classify_sync(None, Some("origin/main\n"));
+        assert_eq!(out, SyncState::Unknown);
+    }
+
+    #[test]
+    fn classify_stays_silent_without_a_probe() {
+        // No repository, no git, or a branch with no ref of its own
+        // (an unborn HEAD, where `for-each-ref` prints nothing).
+        assert_eq!(classify_sync(None, None), SyncState::Unknown);
+    }
+
+    #[test]
+    fn ahead_text_speaks_up_when_there_is_no_upstream() {
+        // The state the change exists for: `git push` would fail
+        // here, and an empty widget reads as "nothing to push".
+        let out = ahead_text(SyncState::NoUpstream).expect("should render");
+        assert!(out.contains("no upstream"), "{out}");
+        // Dimmed: something to notice, not an error.
+        assert!(out.starts_with(DIM) && out.ends_with(RESET), "{out:?}");
+    }
+
+    #[test]
+    fn ahead_text_is_silent_when_it_cannot_tell() {
+        // No repository, no git, or a detached HEAD — none of which
+        // the operator needs a status-line widget to tell them.
+        assert_eq!(ahead_text(SyncState::Unknown), None);
     }
 
     #[test]
