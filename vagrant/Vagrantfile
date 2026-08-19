@@ -163,8 +163,29 @@ Vagrant.configure("2") do |config|
   # user's home rather than root's -- the account the agent
   # actually works as, and the reason nothing here is installed by
   # a root-run script.
+  #
+  # The two BOMBYX_* variables are the host's answer to "which
+  # machine is this VM running on", which nothing inside the guest
+  # can work out for itself -- `hostname` gives the guest's own
+  # name and the guest's DMI describes the emulated machine.
+  # bombyx sets them on the `vagrant` invocation, but **Vagrant
+  # does not export its own environment into the guest**: a
+  # provisioner runs there under the guest's environment, so this
+  # Ruby -- which runs on the host -- has to hand them over.
+  #
+  # Merged into LOCAL_ENV rather than given as a second `env:`. A
+  # repeated key silently wins over the earlier one, and the
+  # variable that vanishes is the one nobody was watching.
+  #
+  # `unknown` rather than nothing, because a VM booted by a bare
+  # `vagrant up` instead of through bombyx sees neither variable,
+  # and a named unknown reads better than a blank that looks like
+  # a broken script.
   config.vm.provision "shell",
     path: "provision.sh",
     privileged: false,
-    env: LOCAL_ENV
+    env: LOCAL_ENV.merge(
+      "BOMBYX_VM_HOST" => ENV.fetch("BOMBYX_VM_HOST", "unknown"),
+      "BOMBYX_VM_HOSTNAME" => ENV.fetch("BOMBYX_VM_HOSTNAME", "unknown"),
+    )
 end

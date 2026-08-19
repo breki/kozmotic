@@ -50,6 +50,17 @@ SWAP_GB=2
 GIT_USER_NAME="${GIT_USER_NAME:-}"
 GIT_USER_EMAIL="${GIT_USER_EMAIL:-}"
 
+# Timezone, also per-developer. Empty leaves the box's own default,
+# which is what every VM ran before this existed -- measured as
+# `Etc/UTC` on cloud-image/debian-13 with `timedatectl`. So an
+# operator who sets nothing sees no change.
+#
+# Worth having as a setting rather than a constant: whether the
+# guest should match the workstation's wall clock or stay on UTC is
+# a preference, and the answer differs per person for the same
+# reason the git identity does.
+TIMEZONE="${TIMEZONE:-}"
+
 RUSTUP_VERSION="1.29.0"
 RUSTUP_SHA256="4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
 
@@ -67,8 +78,8 @@ CLAUDE_SHA256="4e9bec1177ce9690e8bd988b710ac24105e70da428dd094c5adcbbe786a55555"
 # Installing a release binary rather than building the checkout
 # also keeps the status line working while the checkout is mid-
 # refactor and does not compile.
-KOZMOTIC_VERSION="v1.1.0"
-KOZMOTIC_SHA256="6af414179a88abbd9cb533e4033cb5f3bf0d04d6db6401faa18d0dbddfd1c983"
+KOZMOTIC_VERSION="v2.1.1"
+KOZMOTIC_SHA256="68c43268651a4386dffd258662521ff57421fab0db957364c38729025a6e288d"
 
 # --------------------------------------------------------------
 # Helpers and preconditions
@@ -138,6 +149,35 @@ CURRENT_SHELL="$(getent passwd "$WHOAMI" | cut -d: -f7)"
 if [ "$CURRENT_SHELL" != "/bin/bash" ]; then
   log "setting login shell to bash (was $CURRENT_SHELL)"
   sudo chsh -s /bin/bash "$WHOAMI"
+fi
+
+# --------------------------------------------------------------
+# Timezone
+# --------------------------------------------------------------
+# Only when TIMEZONE is set. Left unset, the guest keeps the box's
+# default and this section does nothing.
+#
+# `sudo` because the script runs unprivileged (`privileged: false`
+# in the Vagrantfile) and this writes /etc/localtime. Guarded on
+# the current value the same way the login shell above is, so a
+# re-provision of an already-correct VM prints nothing.
+#
+# An unknown zone fails the script rather than warning and
+# continuing. The trade: a typo costs one line in local.env and a
+# re-provision, whereas a warning buried in several hundred lines
+# of provisioning output leaves the operator believing a clock that
+# was never changed. Reverse it if that proves too strict.
+if [ -n "$TIMEZONE" ]; then
+  CURRENT_TZ="$(timedatectl show -p Timezone --value)"
+  if [ "$CURRENT_TZ" != "$TIMEZONE" ]; then
+    if ! timedatectl list-timezones | grep -qxF "$TIMEZONE"; then
+      fail "TIMEZONE=$TIMEZONE is not a zone this system knows.
+  List the valid names with: timedatectl list-timezones
+  Set it in vagrant/local.env on the workstation."
+    fi
+    log "setting timezone to $TIMEZONE (was $CURRENT_TZ)"
+    sudo timedatectl set-timezone "$TIMEZONE"
+  fi
 fi
 
 # --------------------------------------------------------------
@@ -440,15 +480,45 @@ log "kozmotic: $("$KOZMOTIC_BIN" --version), checksum verified"
 # ~/.profile has no such guard but is read only by login shells,
 # which is why it is not sufficient on its own.
 PATH_MARKER='# provisioned by vagrant/provision.sh'
-PATH_LINE='export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
+PATH_DIRS='$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.claude/bin'
+PATH_LINE="export PATH=\"$PATH_DIRS:\$PATH\""
 
 touch "$HOME/.profile" "$HOME/.bashrc"
 
-if ! grep -qF "$PATH_MARKER" "$HOME/.profile"; then
+# Drops a previously provisioned marker-and-line pair, so the block
+# below can write the current one.
+#
+# The guard used to be `grep -qF "$PATH_MARKER"`, which is a guard
+# on the *marker* rather than on the content -- so editing
+# PATH_LINE was silently ignored on every VM already provisioned.
+# That is the same defect the kozmotic hash guard avoids by
+# comparing the binary rather than asking whether a file exists,
+# and it is how `$HOME/.claude/bin` came to be missing from a VM
+# whose script had already been corrected.
+#
+# Removes exactly the marker line and the one line after it, rather
+# than anything matching `export PATH=`, so a line the operator
+# added themselves is left alone.
+strip_provisioned_path() {
+  awk -v marker="$PATH_MARKER" '
+    $0 == marker { skip = 1; next }
+    skip         { skip = 0; next }
+                 { print }
+  ' "$1"
+}
+
+for rc in "$HOME/.profile" "$HOME/.bashrc"; do
+  if ! grep -qF "$PATH_LINE" "$rc"; then
+    strip_provisioned_path "$rc" > "$WORK/rc"
+    cat "$WORK/rc" > "$rc"
+  fi
+done
+
+if ! grep -qF "$PATH_LINE" "$HOME/.profile"; then
   printf '%s\n%s\n' "$PATH_MARKER" "$PATH_LINE" >> "$HOME/.profile"
 fi
 
-if ! grep -qF "$PATH_MARKER" "$HOME/.bashrc"; then
+if ! grep -qF "$PATH_LINE" "$HOME/.bashrc"; then
   {
     printf '%s\n%s\n\n' "$PATH_MARKER" "$PATH_LINE"
     cat "$HOME/.bashrc"
@@ -457,6 +527,93 @@ if ! grep -qF "$PATH_MARKER" "$HOME/.bashrc"; then
   # and permissions rather than the temp file's.
   cat "$WORK/bashrc" > "$HOME/.bashrc"
 fi
+
+# --------------------------------------------------------------
+# Which host this VM runs on
+# --------------------------------------------------------------
+# The Vagrantfile hands BOMBYX_VM_HOST and BOMBYX_VM_HOSTNAME to
+# this script; see the comment on the shell provisioner for why
+# that hand-off is needed at all.
+#
+# **They have to be written down, not just used here.** The
+# provisioner's `env:` lasts for this run only, and the thing that
+# wants them -- the `env:BOMBYX_VM_HOST` status-line widget --
+# renders whenever Claude Code redraws, long afterwards, in a
+# shell this script has exited. So the values are exported from
+# the same two rc files the PATH line uses, which is what puts
+# them in the environment Claude Code and its children inherit.
+#
+# Baked in at provision time on purpose. Re-provisioning from a
+# different host rewrites them, which is the only moment the
+# answer can legitimately change.
+#
+# Guarded on the *content* like the PATH block above, for the same
+# reason: a marker-only guard made an edited value a silent no-op
+# on every VM already provisioned.
+VMHOST_MARKER='# VM host identity, provisioned by vagrant/provision.sh'
+# `%q` so a value needing quoting gets it. The alias is charset-
+# checked by bombyx, but `hostname -s` on the host is not, and a
+# quoting bug here would be a broken login shell rather than a
+# wrong status line.
+VMHOST_LINE_A="$(
+  printf 'export BOMBYX_VM_HOST=%q' "${BOMBYX_VM_HOST:-unknown}"
+)"
+VMHOST_LINE_B="$(
+  printf 'export BOMBYX_VM_HOSTNAME=%q' "${BOMBYX_VM_HOSTNAME:-unknown}"
+)"
+
+# Touched here as well as in the PATH block above. Relying on that
+# block having run first is a dependency nothing states, and the
+# failure is ugly: `grep` on a missing file exits 2 and `awk` dies,
+# so provisioning stops with a message about the rc file rather
+# than about the ordering.
+touch "$HOME/.profile" "$HOME/.bashrc"
+
+# Both lines, separately. A single `grep -F` given a two-line
+# pattern treats the lines as alternatives and succeeds on either,
+# so a host that changed while the hostname did not would have
+# counted as already current.
+vmhost_is_current() {
+  grep -qF "$VMHOST_LINE_A" "$1" && grep -qF "$VMHOST_LINE_B" "$1"
+}
+
+# Drops a previously provisioned marker and the two lines under it.
+strip_provisioned_vmhost() {
+  awk -v marker="$VMHOST_MARKER" '
+    $0 == marker { skip = 2; next }
+    skip > 0     { skip--; next }
+                 { print }
+  ' "$1"
+}
+
+# Prepended to ~/.bashrc and appended to ~/.profile, for the same
+# reason the PATH block above is: Debian's ~/.bashrc returns before
+# anything at its end for a non-interactive shell, so appending
+# there would leave `ssh vm 'echo $BOMBYX_VM_HOST'` empty -- and
+# that is the first thing anyone debugging this will try.
+for rc in "$HOME/.profile" "$HOME/.bashrc"; do
+  if ! vmhost_is_current "$rc"; then
+    strip_provisioned_vmhost "$rc" > "$WORK/rc"
+    cat "$WORK/rc" > "$rc"
+  fi
+done
+
+if ! vmhost_is_current "$HOME/.profile"; then
+  printf '%s\n%s\n%s\n' \
+    "$VMHOST_MARKER" "$VMHOST_LINE_A" "$VMHOST_LINE_B" \
+    >> "$HOME/.profile"
+fi
+
+if ! vmhost_is_current "$HOME/.bashrc"; then
+  {
+    printf '%s\n%s\n%s\n\n' \
+      "$VMHOST_MARKER" "$VMHOST_LINE_A" "$VMHOST_LINE_B"
+    cat "$HOME/.bashrc"
+  } > "$WORK/bashrc"
+  cat "$WORK/bashrc" > "$HOME/.bashrc"
+fi
+
+log "vm host: ${BOMBYX_VM_HOST:-unknown} (${BOMBYX_VM_HOSTNAME:-unknown})"
 
 # --------------------------------------------------------------
 # Claude Code settings
@@ -481,12 +638,24 @@ fi
 # silent VM.
 log "writing claude code settings"
 mkdir -p "$HOME/.claude"
+# `env:BOMBYX_VM_HOST:vm` leads the line, because "which machine am
+# I on" is the one fact an agent inside a VM cannot otherwise
+# answer. The `host` widget is no substitute: it reports
+# `kozmotic-agent`, the guest's own name, which the prompt already
+# says.
+#
+# It needs the export written further up and kozmotic v2.1.0 or
+# newer, where the `env:` widget family landed -- the pin above is
+# v2.1.1. A bare `vagrant up` instead of bombyx yields `unknown`,
+# and an unset or blank value hides the widget entirely, so a
+# mis-provisioned VM loses it rather than showing a lie.
 cat > "$HOME/.claude/settings.json" <<'JSON'
 {
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/bin/kozmotic status-line --show 'directory,git-branch,git-ahead,git-files,git-lines,last-commit;rate-limit,rate-limit-7d,cost-rate,duration;context,lines,api-status'"
+    "command": "~/.claude/bin/kozmotic status-line --show 'env:BOMBYX_VM_HOST:vm,directory,git-branch,git-ahead,git-files,git-lines,last-commit;rate-limit,rate-limit-7d,cost-rate,duration;context,lines,api-status'"
   },
+  "model": "opus[1m]",
   "effortLevel": "medium",
   "theme": "dark",
   "editorMode": "normal",
