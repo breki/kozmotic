@@ -8,7 +8,28 @@ Pick the archive matching your Mac: `aarch64` for Apple
 silicon (M1 and later), `x86_64` for Intel. `uname -m`
 prints `arm64` or `x86_64` respectively.
 
-## 1. Extract, clear the quarantine flag, install
+## 1. Verify the download
+
+Fetch `SHA256SUMS` from the same release. It lists both the
+archives and the binary inside each one. Check the archive
+before extracting: a check that runs after `self install`
+has already run the binary it was meant to vouch for.
+
+macOS ships `shasum` rather than GNU `sha256sum`, and its
+`--ignore-missing` support varies by version, so name the
+file you downloaded and hand `shasum` that one line. Use
+the exact name -- a glob matching both the Intel and the
+ARM archive produces two names and matches nothing:
+
+```bash
+archive=kozmotic-v2.1.1-aarch64-apple-darwin.tar.gz  # yours
+grep -F "  $archive" SHA256SUMS | shasum -a 256 -c -
+```
+
+`sha256sum` writes two spaces between digest and name,
+which is why the pattern starts with two.
+
+## 2. Extract, clear the quarantine flag, install
 
 The binaries are **not signed or notarized**, so Gatekeeper
 quarantines them on download. Clear the flag before the
@@ -16,6 +37,10 @@ first run, or macOS will refuse to launch the binary.
 
 ```bash
 tar xzf kozmotic-*-apple-darwin.tar.gz
+# The binary inside is listed too, under the path the
+# archive unpacks to.
+grep -F "  ${archive%.tar.gz}/kozmotic" SHA256SUMS |
+  shasum -a 256 -c -
 cd kozmotic-*-apple-darwin
 xattr -d com.apple.quarantine kozmotic
 ./kozmotic self install
@@ -40,7 +65,7 @@ the binary, allow it under **System Settings → Privacy &
 Security**, where a "kozmotic was blocked" notice appears
 with an **Open Anyway** button.
 
-## 2. Wire it into Claude Code
+## 3. Wire it into Claude Code
 
 Both of these go in `~/.claude/settings.json`.
 
@@ -78,7 +103,7 @@ The first sound may prompt for microphone-adjacent audio
 permissions on some macOS versions; kozmotic only plays
 audio, it never records.
 
-## 3. Everyday use
+## 4. Everyday use
 
 ```bash
 kozmotic --help                  # all subcommands

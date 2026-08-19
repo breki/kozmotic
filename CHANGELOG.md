@@ -10,6 +10,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- releases: `SHA256SUMS` asset covering both the release archives and the binary
+  inside each one, so a pinned digest can be verified against the release
+
 ## [2.1.1] - 2026-08-18
 
 ### Changed

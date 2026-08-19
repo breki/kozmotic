@@ -38,6 +38,15 @@ extract it, then install it to `~/.claude/bin/`:
 ./kozmotic self install
 ```
 
+Every release also carries a `SHA256SUMS` asset covering
+both the archives and the binary inside each one, so a
+pinned digest can be checked against the release rather
+than re-derived by hand. Verify the archive before you
+extract and run it -- the per-platform commands are in the
+install guides linked below, because the tool differs
+(`sha256sum` on Linux, `shasum` on macOS, `Get-FileHash`
+on Windows).
+
 This copies the binary to `~/.claude/bin/kozmotic` so
 Claude Code hooks and the status line can reference it by
 a stable path:

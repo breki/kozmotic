@@ -7,7 +7,35 @@ compiler is required.
 Requirements: 64-bit Windows 10 or 11. Nothing else needs
 installing.
 
-## 1. Extract and install
+## 1. Verify the download
+
+Fetch `SHA256SUMS` from the same release. It lists both the
+archives and the binary inside each one. Check the zip
+before extracting: a check that runs after `self install`
+has already run the binary it was meant to vouch for.
+
+Name the file exactly rather than using a wildcard. If a
+wildcard matches two zips, `Get-FileHash` returns an array
+and `.Hash` on it fails in Windows PowerShell 5.1:
+
+```powershell
+$zip  = 'kozmotic-v2.1.1-x86_64-pc-windows-msvc.zip'  # yours
+$line = Select-String -Path SHA256SUMS -SimpleMatch "  $zip" |
+        Select-Object -First 1
+if (-not $line) { throw "no SHA256SUMS entry for $zip" }
+$want = $line.Line.Split(' ')[0]
+if ((Get-FileHash $zip -Algorithm SHA256).Hash -ine $want) {
+    throw 'checksum mismatch'
+}
+'archive OK'
+```
+
+It throws on a mismatch rather than printing two digests
+for you to compare by eye. (`sha256sum` writes two spaces
+between digest and name, which is why the pattern starts
+with two.)
+
+## 2. Extract and install
 
 Unblock the downloaded zip first — Windows marks files
 from the internet, and the mark is inherited by every file
@@ -16,6 +44,18 @@ extracted from them.
 ```powershell
 Unblock-File .\kozmotic-*-windows-msvc.zip
 Expand-Archive .\kozmotic-*-windows-msvc.zip -DestinationPath .
+
+# The binary inside is listed too, under the path the
+# archive unpacks to.
+$exe  = ($zip -replace '\.zip$','') + '/kozmotic.exe'
+$line = Select-String -Path SHA256SUMS -SimpleMatch "  $exe" |
+        Select-Object -First 1
+if (-not $line) { throw "no SHA256SUMS entry for $exe" }
+$want = $line.Line.Split(' ')[0]
+if ((Get-FileHash $exe -Algorithm SHA256).Hash -ine $want) {
+    throw 'checksum mismatch'
+}
+
 cd .\kozmotic-*-windows-msvc
 .\kozmotic.exe self install
 ```
@@ -33,7 +73,7 @@ Verify:
 If SmartScreen blocks the first run, choose **More info →
 Run anyway**. The binaries are not code-signed.
 
-## 2. Wire it into Claude Code
+## 3. Wire it into Claude Code
 
 Both of these go in `%USERPROFILE%\.claude\settings.json`.
 Claude Code expands `~` on Windows too, so the paths below
@@ -71,7 +111,7 @@ or needs attention:
 
 Note the `.exe` suffix in both commands.
 
-## 3. Everyday use
+## 4. Everyday use
 
 ```powershell
 kozmotic --help                  # all subcommands

@@ -153,11 +153,81 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub Release
+      # Downstream consumers pin kozmotic by SHA-256 -- both the
+      # archive they download and the binary they extract from it, as
+      # `vagrant/provision.sh` does. Publishing both digests turns
+      # that pin from a value someone re-derived by hand into one
+      # checkable against the release.
+      #
+      # The release job downloads all five build artifacts into one
+      # directory, so it is the only place a single SHA256SUMS can be
+      # produced.
+      - name: Checksum the assets
+        run: scripts/checksum-assets.sh artifacts
+
+      # Published releases are immutable here, and a release is
+      # published only once all its assets are up.
+      #
+      # The tag alone cannot carry that guarantee: rewriting history
+      # moves every tag, so a re-pushed tag re-runs this job against
+      # bytes consumers may already have pinned. So the release is
+      # built as a draft, gets its assets, and is published last --
+      # which also means a run that dies partway leaves a draft
+      # rather than a half-filled release, and the retry starts over
+      # from an empty one.
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME"
-          --title "$GITHUB_REF_NAME"
-          --notes-file release_notes.md
-          artifacts/*
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+
+          if gh release view "$tag" > /dev/null 2>&1; then
+            # Fail closed: an API error here must not be read as
+            # "no release exists yet", which would send us on to
+            # overwrite one.
+            if ! state=$(
+              gh release view "$tag" --json isDraft,assets \
+                --jq '(.isDraft|tostring) + " " + (
+                  [.assets[].name] | index("SHA256SUMS") | tostring
+                )'
+            ); then
+              echo "::error::cannot read the state of $tag;" \
+                   "refusing to touch it"
+              exit 1
+            fi
+            case "$state" in
+              "true "*)
+                # A draft is the leftover of a run that did not
+                # finish. Delete it so the asset set is exactly what
+                # this run built -- `--clobber` would replace
+                # same-named assets but keep any others, and
+                # SHA256SUMS would then not cover every download.
+                # The git tag is untouched: no --cleanup-tag.
+                echo "$tag has an unfinished draft release; replacing it"
+                gh release delete "$tag" --yes
+                ;;
+              "false null")
+                echo "::error::$tag is already published, without" \
+                     "checksums. Adding them would rewrite a release" \
+                     "consumers may have pinned. Do it by hand, or" \
+                     "tag a new version."
+                exit 1
+                ;;
+              *)
+                echo "::notice::$tag is already published with" \
+                     "checksums; nothing to do."
+                exit 0
+                ;;
+            esac
+          fi
+
+          gh release create "$tag" --draft \
+            --title "$tag" \
+            --notes-file release_notes.md \
+            artifacts/kozmotic-*
+          # Last, and only once the archives are up, so its presence
+          # means the release is complete.
+          gh release upload "$tag" artifacts/SHA256SUMS
+          gh release edit "$tag" --draft=false

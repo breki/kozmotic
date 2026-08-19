@@ -22,10 +22,27 @@ Pick the archive matching your CPU: `x86_64` for Intel or
 AMD, `aarch64` for ARM (Raspberry Pi, Ampere, Graviton).
 `uname -m` tells you which you have.
 
-## 2. Extract and install
+## 2. Verify the download
+
+Fetch `SHA256SUMS` from the same release. It lists both the
+archives and the binary inside each one, and
+`--ignore-missing` skips the entries for platforms you did
+not download. Do this before extracting: a check that runs
+after `self install` has already run the binary it was
+meant to vouch for.
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Every line it prints must say `OK`. If it reports `FAILED`,
+delete the archive and download it again.
+
+## 3. Extract and install
 
 ```bash
 tar xzf kozmotic-*-linux-gnu.tar.gz
+sha256sum -c SHA256SUMS --ignore-missing   # now the binary too
 cd kozmotic-*-linux-gnu
 ./kozmotic self install
 ```
@@ -40,7 +57,7 @@ Verify:
 ~/.claude/bin/kozmotic --version
 ```
 
-## 3. Wire it into Claude Code
+## 4. Wire it into Claude Code
 
 Both of these go in `~/.claude/settings.json`.
 
@@ -77,7 +94,7 @@ or needs attention:
 If you are on a headless machine with no audio device, the
 sound simply fails to play; it will not break the hook.
 
-## 4. Everyday use
+## 5. Everyday use
 
 ```bash
 kozmotic --help                  # all subcommands
