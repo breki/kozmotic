@@ -606,7 +606,7 @@ mod tests {
     fn parse_coverage_ignore_empty_when_section_absent() {
         let toml = "[workspace]\nmembers = []\n\n\
                     [profile.release-fast]\ninherits = \"release\"\n";
-        assert!(parse_coverage_ignore(toml).is_empty());
+        assert_eq!(parse_coverage_ignore(toml), Vec::<String>::new());
     }
 
     #[test]
@@ -615,7 +615,7 @@ mod tests {
         // section's `ignore`-lookalike must not leak in.
         let toml = "[workspace.metadata.coverage]\nother = 1\n\n\
                     [other.section]\nignore = [\"nope.rs\"]\n";
-        assert!(parse_coverage_ignore(toml).is_empty());
+        assert_eq!(parse_coverage_ignore(toml), Vec::<String>::new());
     }
 
     #[test]
@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn merge_ranges_handles_empty() {
-        assert!(merge_ranges(Vec::new()).is_empty());
+        assert_eq!(merge_ranges(Vec::new()), Vec::<(u64, u64)>::new());
     }
 
     #[test]
@@ -732,7 +732,7 @@ mod tests {
 
     #[test]
     fn uncovered_ranges_handles_empty() {
-        assert!(uncovered_ranges(&[]).is_empty());
+        assert_eq!(uncovered_ranges(&[]), Vec::<(u64, u64)>::new());
     }
 
     #[test]

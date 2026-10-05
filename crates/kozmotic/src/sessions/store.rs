@@ -344,8 +344,14 @@ mod tests {
 
     #[test]
     fn transcripts_in_an_unreadable_directory_are_empty() {
-        assert!(transcripts_in(Path::new("/nonexistent/xyz")).is_empty());
-        assert!(project_dirs(Path::new("/nonexistent/xyz")).is_empty());
+        assert_eq!(
+            transcripts_in(Path::new("/nonexistent/xyz")),
+            Vec::<(PathBuf, std::time::SystemTime)>::new()
+        );
+        assert_eq!(
+            project_dirs(Path::new("/nonexistent/xyz")),
+            Vec::<PathBuf>::new()
+        );
     }
 
     #[test]

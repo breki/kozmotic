@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn host_name_is_non_empty() {
         let name = host_name().expect("host should have a name");
-        assert!(!name.is_empty());
+        assert_ne!(name, "");
         assert!(!name.contains('.'));
     }
 
@@ -382,7 +382,7 @@ mod tests {
         for widget in [Widget::Host, Widget::Ram, Widget::Disk] {
             let out = render(&widget, &sys)
                 .unwrap_or_else(|| panic!("{widget} should render"));
-            assert!(!out.is_empty());
+            assert_ne!(out, "", "{widget}");
         }
     }
 

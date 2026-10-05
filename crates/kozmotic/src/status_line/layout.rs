@@ -186,7 +186,7 @@ mod tests {
             spec.left,
             vec![Widget::Model, Widget::Context, Widget::Cost]
         );
-        assert!(spec.right.is_empty());
+        assert_eq!(spec.right, Vec::<Widget>::new());
     }
 
     #[test]
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn parse_allows_an_empty_left_group() {
         let spec = LineSpec::parse("~cost").unwrap();
-        assert!(spec.left.is_empty());
+        assert_eq!(spec.left, Vec::<Widget>::new());
         assert_eq!(spec.right, vec![Widget::Cost]);
     }
 
