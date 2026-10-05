@@ -1,2 +1,13 @@
 [alias]
 xtask = "run --package xtask --"
+
+# Links the C runtime statically into every binary built for an MSVC
+# target. Without it kozmotic.exe needs VCRUNTIME140.dll at start-up,
+# which Windows does not ship: it comes with the Visual C++
+# Redistributable, so on a machine without one, such as Windows Server
+# Core, Windows refuses to start the program (0xC0000135, DLL not
+# found). A RUSTFLAGS or CARGO_ENCODED_RUSTFLAGS environment variable
+# replaces this list rather than extending it, so a release build must
+# not set either.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

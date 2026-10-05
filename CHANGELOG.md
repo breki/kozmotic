@@ -15,6 +15,12 @@ and this project adheres to
 - releases: `SHA256SUMS` asset covering both the release archives and the binary
   inside each one, so a pinned digest can be verified against the release
 
+### Fixed
+
+- releases: the Windows binary links the C runtime statically, so it no longer
+  needs `VCRUNTIME140.dll` and starts without the Visual C++ Redistributable;
+  without one it failed with 0xC0000135 (seen on Windows Server Core)
+
 ## [2.1.1] - 2026-08-18
 
 ### Changed
