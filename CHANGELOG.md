@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-06
+
 ### Added
 
 - releases: `SHA256SUMS` asset covering both the release archives and the binary
