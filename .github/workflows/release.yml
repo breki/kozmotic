@@ -69,6 +69,13 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }}
 
+      # The shipped exe must start without the Visual C++
+      # Redistributable; the script says why.
+      - name: Check kozmotic.exe imports no VC runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/check-no-vc-runtime.ps1 target\${{ matrix.target }}\release\kozmotic.exe
+
       - name: Determine archive name
         id: archive
         shell: bash

@@ -39,6 +39,15 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       - name: Run tests
         run: cargo test --verbose
+      # An early warning; release.yml runs the same check on the
+      # binary it ships. The script says why the check exists.
+      - name: Check kozmotic.exe imports no VC runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --verbose
+          if ($LASTEXITCODE -ne 0) { throw "cargo build exited with $LASTEXITCODE" }
+          scripts/check-no-vc-runtime.ps1 target\debug\kozmotic.exe
 
   fmt:
     name: Format
