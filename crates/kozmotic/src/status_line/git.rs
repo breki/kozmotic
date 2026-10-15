@@ -228,7 +228,7 @@ pub struct GitContext {
 
 fn run_git(dir: Option<&Path>, args: &[&str]) -> Option<String> {
     let mut cmd = Command::new("git");
-    cmd.args(args);
+    cmd.args(args).env("GIT_OPTIONAL_LOCKS", "0");
     if let Some(dir) = dir {
         cmd.current_dir(dir);
     }
@@ -253,6 +253,12 @@ impl GitContext {
             dir: Some(dir),
             ..Self::default()
         }
+    }
+
+    /// Determine whether widgets refer to a real working tree.
+    pub(super) fn is_work_tree(&self) -> bool {
+        run_git(self.dir(), &["rev-parse", "--is-inside-work-tree"])
+            .is_some_and(|value| value.trim() == "true")
     }
 
     fn dir(&self) -> Option<&Path> {

@@ -42,6 +42,9 @@ enum Commands {
     /// Format Claude Code session data for the status line
     #[command(name = "status-line")]
     StatusLine(StatusLineArgs),
+    /// Emit Codex Stop-hook JSON with a plain-text Git summary
+    #[command(name = "codex-git-status")]
+    CodexGitStatus,
     /// Play a notification sound (for hooks and alerts)
     #[command(name = "agent-ping")]
     AgentPing(AgentPingArgs),
@@ -64,6 +67,9 @@ fn main() -> ExitCode {
 
     match cli.command {
         Some(Commands::Example(args)) => handle_example(cli.format, args),
+        Some(Commands::CodexGitStatus) => {
+            status_line::handle_codex_git_status()
+        }
         Some(Commands::StatusLine(args)) => {
             handle_status_line(cli.format, &args)
         }

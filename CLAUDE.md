@@ -28,6 +28,7 @@ commands.
 | `kozmotic example` | Reference subcommand for new tools |
 | `kozmotic agent-ping` | Play notification sounds (presets, files, tones) |
 | `kozmotic status-line` | Format Claude Code session JSON for the status bar |
+| `kozmotic codex-git-status` | Emit Git summary JSON for Codex hooks |
 | `kozmotic sessions prompts` | List a session's user prompts from the transcript store |
 | `kozmotic self install` | Install the binary into `~/.claude/bin/` |
 
@@ -192,7 +193,9 @@ for tools that are not present:
    `crates/kozmotic/src/main.rs`.
 2. Implement the handler in its own module under
    `crates/kozmotic/src/`.
-3. Wrap the result with `Output::success(tool, data)`.
+3. Wrap general-tool results with `Output::success(tool, data)`.
+   Protocol adapters (`status-line`, `codex-git-status`) emit the consumer
+   wire format directly; document such exceptions in README.md.
 4. Respect the `--format` flag for JSON vs human
    output.
 5. Cover the new path in

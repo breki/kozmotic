@@ -17,9 +17,12 @@
 | `kozmotic example` | Reference for new tools |
 | `kozmotic agent-ping` | Play notification sounds |
 | `kozmotic status-line` | Format session JSON for the status bar |
+| `kozmotic codex-git-status` | Emit Git summary JSON for Codex hooks |
 | `kozmotic self install` | Install into `~/.claude/bin/` |
 
 Global flag: `--format json|human` (default `json`).
+The status-line and Codex hook adapters emit their consumer protocols
+directly, independently of this flag.
 
 ## Build Commands
 

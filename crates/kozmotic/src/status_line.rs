@@ -10,6 +10,7 @@ use std::io::Read;
 use std::process::ExitCode;
 
 mod api_status;
+mod codex_hook;
 mod env_var;
 mod format;
 mod git;
@@ -18,6 +19,8 @@ mod session;
 mod system;
 mod theme;
 mod widget;
+
+pub(crate) use codex_hook::handle as handle_codex_git_status;
 
 use crate::output::{CliError, OutputFormat, Tool, emit_error};
 use git::GitContext;

@@ -8,7 +8,11 @@ invocation: Use when adding new CLI tools, subcommands, or agent-facing features
 
 ## Output Envelope
 
-Every command returns a consistent JSON envelope via `Output<T>`:
+General tools return a JSON envelope via `Output<T>`. Protocol adapters
+are explicit exceptions: `status-line` emits terminal text, and
+`codex-git-status` emits Codex hook JSON. Both bypass `--format`.
+
+The general envelope is:
 
 ```rust
 #[derive(Serialize, Deserialize)]

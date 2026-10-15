@@ -121,8 +121,44 @@ kozmotic <tool-name> [OPTIONS]
 | `kozmotic example` | Reference subcommand for new tools |
 | `kozmotic agent-ping` | Play notification sounds (presets, files, tones) |
 | `kozmotic status-line` | Format Claude Code session JSON for the status bar |
+| `kozmotic codex-git-status` | Emit a Git summary for a Codex Stop hook |
 | `kozmotic sessions prompts` | List a session's user prompts from the transcript store |
 | `kozmotic self install` | Install the binary into `~/.claude/bin/` |
+
+### `codex-git-status`
+
+Read a Codex lifecycle hook payload from stdin and emit Codex hook JSON
+containing `systemMessage`. The command reuses the existing Git widgets:
+branch, ahead/behind, file counts, changed lines, and last-commit age.
+The payload's `cwd` chooses the checkout, independently of the process cwd.
+
+```json
+{"cwd":"/path/to/project"}
+```
+
+The result is plain text inside JSON, with no ANSI colors or continuation
+request. Invalid input, an unavailable checkout/Git executable, and paths
+outside a Git worktree return `{}` with exit code zero. Configure a hook
+timeout to bound slow Git operations. No fetch is performed.
+
+Register it as a Codex `Stop` hook, using the binary installed by
+`kozmotic self install`:
+
+```json
+{
+  "hooks": {
+    "Stop": [{"hooks": [{
+      "type": "command",
+      "command": "\"$HOME/.claude/bin/kozmotic\" codex-git-status",
+      "timeout": 6
+    }]}]
+  }
+}
+```
+
+Save the configuration in `.codex/hooks.json`, then review/trust it through
+Codex's `/hooks` UI. The command always emits the Codex wire format, even
+with `--format human`; the general Kozmotic envelope is not used.
 
 ### `status-line`
 
@@ -379,9 +415,9 @@ All tools output JSON by default:
 ```
 
 Pass `--format human` for readable output instead.
-`status-line` is the exception: it renders a status bar
-line rather than an envelope, since Claude Code consumes
-its stdout directly.
+`status-line` renders a status bar line rather than an envelope, since
+Claude Code consumes its stdout directly. `codex-git-status` emits Codex
+hook JSON directly. Both protocol adapters bypass `--format`.
 
 ## Development
 

@@ -10,6 +10,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- codex-git-status: reuse Git widgets in a native Codex Stop-hook command; emit
+  plain-text systemMessage JSON without a Python adapter
+
 ## [2.2.0] - 2026-10-06
 
 ### Added
