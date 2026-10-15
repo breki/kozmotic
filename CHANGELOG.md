@@ -10,6 +10,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-15
+
 ### Added
 
 - codex-git-status: reuse Git widgets in a native Codex Stop-hook command; emit
