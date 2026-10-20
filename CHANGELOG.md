@@ -10,6 +10,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Update the TLS stack behind `ureq` (`rustls` 0.23.46, `rustls-webpki`
+  0.103.16, `webpki-roots` 1.0.10) for ten RUSTSEC advisories, among them a
+  ServerHello downgrade of later connections, acceptance of distrusted
+  intermediate certificates, and secrets in `Debug` output.
+
 ## [2.3.0] - 2026-10-15
 
 ### Added
