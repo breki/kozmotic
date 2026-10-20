@@ -45,7 +45,7 @@ kozmotic/
     skills/           # slash-command skills
   .github/
     workflows/
-      ci.yml          # test + fmt + clippy on 3 OS
+      ci.yml          # test (3 OS), fmt, clippy, dep-age
       release.yml     # binary release workflow
   assets/
     sounds/           # embedded Pixabay MP3 files
@@ -58,16 +58,17 @@ kozmotic/
   tests/
     integration_test.rs
   xtask/
-    src/
-      main.rs         # xtask CLI entry point
-      helpers.rs      # project_root, run_cargo, etc.
-      validate.rs     # fmt + clippy + test pipeline
+    src/              # the rustbase template's xtask, calling
+                      # the published rustbase-xtask library
+      helpers.rs      # kozmotic's Config (tasks_config)
+      validate.rs     # the library's gates minus DEFERRED
+  docs/
+    todo.md           # ideas and upcoming tasks
   Cargo.toml          # workspace root
   CHANGELOG.md        # Keep a Changelog format
   CLAUDE.md           # project instructions
   CREDITS.md          # sound attribution
   LICENSE
-  TODO.md             # ideas and upcoming tasks
 ```
 
 ## Core Abstractions
@@ -209,13 +210,13 @@ Dev: `assert_cmd`, `predicates`.
 
 ## Quality Gates
 
-Before any task is complete, run
-`cargo xtask validate`, which checks:
-
-1. `cargo fmt --all -- --check` — formatted
-2. `cargo clippy --all-targets -- -D warnings` — clean
-3. `cargo test` — all tests pass
-4. Coverage >= 95%
+Before any task is complete, run `cargo xtask validate`,
+which runs the shared `rustbase-xtask` gates in order:
+dependency cooldown, format, scripts staged executable,
+duplication, Clippy, the xtask tests, coverage (>= 90%
+overall, >= 85% per file, running every other crate's tests),
+and the RUSTSEC audit. `CLAUDE.md`'s "Definition of Done" gives
+the details.
 
 ## CI Pipeline
 
@@ -223,9 +224,10 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 | Job | Runs on | What |
 |-----|---------|------|
-| test | ubuntu, windows, macos | `cargo test` |
+| test | ubuntu, windows, macos | `cargo xtask test` |
 | fmt | ubuntu | `cargo fmt --check` |
-| clippy | ubuntu | `cargo clippy -D warnings` |
+| clippy | ubuntu | `cargo xtask clippy` (+ xtask per feature group) |
+| dep-age | ubuntu | `cargo xtask dep-age-check` against the PR or push base |
 
 Linux jobs install `libasound2-dev` for rodio.
 
@@ -241,9 +243,10 @@ Linux jobs install `libasound2-dev` for rodio.
 
 ## Planning
 
-`TODO.md` tracks ideas and upcoming tasks. Check it
-before starting new work and update it as items are
-completed or added.
+`docs/todo.md` tracks ideas and upcoming tasks. Check it
+before starting new work. Add and remove items with
+`cargo xtask todo add` and `cargo xtask todo done`, never by
+hand (see `CLAUDE.md`, "Planning").
 
 ## Adding a New Subcommand
 

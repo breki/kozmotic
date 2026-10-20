@@ -1,9 +1,9 @@
 ---
-description: Plan and implement a captured issue from TODO.md
+description: Plan and implement a captured issue from docs/todo.md
 allowed-tools: Bash(cargo xtask*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Read, Write, Edit, Glob, Grep, Agent, AskUserQuestion, Skill(commit)
 ---
 
-Plan and implement an item captured by `/todo`. The
+Plan and implement an item from `docs/todo.md`. The
 plan lives at `docs/issues/<slug>.md` and is updated
 as the work progresses.
 
@@ -11,16 +11,16 @@ as the work progresses.
 
 - **With a slug argument** (e.g.
   `/implement search-bar-perf`): use that slug. If it
-  does not exist under `## Pending` in `TODO.md`,
+  is not an item in `docs/todo.md`,
   stop and tell the user.
-- **Without arguments**: read `TODO.md`, list
+- **Without arguments**: read `docs/todo.md`, list
   the pending slugs with their summaries, and ask the
   user which one to implement (use
   `AskUserQuestion`). Do not pick one yourself.
 
 ## Phase 1 -- Plan
 
-1. Read `TODO.md` and locate the chosen item.
+1. Read `docs/todo.md` and locate the chosen item.
 
 2. If `docs/issues/<slug>.md` already exists, read
    it -- earlier analysis may already be there.
@@ -113,9 +113,8 @@ particular:
 
 ## Phase 3 -- Finalise
 
-1. Run `cargo xtask validate`. All checks must pass
-   (fmt, clippy, tests, coverage >= 90%, duplication
-   <= 6%).
+1. Run `cargo xtask validate`. All eight gates must pass
+   (`CLAUDE.md`, "Definition of Done").
 
 2. If the change affects developer workflow or skills,
    update the relevant files under `.claude/commands/`
@@ -129,17 +128,16 @@ particular:
      links to changed files (path:line where
      useful), follow-ups.
 
-4. In `TODO.md`, move the item to Done
-   mechanically (do not hand-edit the file):
+4. Remove the item from `docs/todo.md` mechanically (do
+   not hand-edit the file):
 
    ```
-   cargo xtask todo done <slug> --date <today's date>
+   cargo xtask todo done <slug>
    ```
 
-   The command moves the bullet to the top of `## Done`
-   (newest first), stamps the date, and links the slug
-   to `issues/<slug>.md`. Pass `--summary "<text>"` to
-   override the pending summary for the Done entry.
+   The command deletes the item's entry; git history,
+   `CHANGELOG.md` and `docs/issues/<slug>.md` keep the
+   record of what shipped.
 
 5. **Pre-launch code reviewers in the background**
    (optional optimisation). The next `/commit` runs
@@ -195,6 +193,6 @@ particular:
   The issue doc is the audit trail.
 - Never start implementing before the user explicitly
   approves the plan.
-- Never edit `## Done` items in `TODO.md` except
-  to add a new one when finalising.
+- Never hand-edit `docs/todo.md`; go through
+  `cargo xtask todo`.
 - Use 80-character margins in all Markdown.

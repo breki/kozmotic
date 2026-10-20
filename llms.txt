@@ -27,15 +27,17 @@ directly, independently of this flag.
 ## Build Commands
 
 ```
-cargo xtask validate          # fmt + clippy + tests + coverage
+cargo xtask validate          # dep-age + fmt + scripts + dupes + clippy + tests + coverage + audit
 cargo xtask test [filter]     # tests only
-cargo xtask clippy            # lint only
+cargo xtask clippy            # lint (+ xtask: all features off, each alone)
 cargo xtask fmt               # format code
-cargo xtask check             # fast compile check
+cargo xtask check             # type-check all targets (compiles tests, runs none)
 cargo xtask coverage          # coverage check (>=90%)
 cargo xtask dupes             # code duplication check (<=6%)
 cargo xtask changelog add     # add a CHANGELOG entry
-cargo xtask todo list|add|done # manage TODO.md items
+cargo xtask audit             # RUSTSEC advisory audit (needs cargo-audit)
+cargo xtask dep-age-check     # 14-day cooldown on changed deps
+cargo xtask todo list|add|done # manage docs/todo.md items
 ```
 
 PowerShell entry: `.\build.ps1 <command>` (validate,
@@ -45,10 +47,15 @@ test, clippy, fmt, check, coverage, build, clean).
 
 - `#[deny(warnings)]`, `#[forbid(unsafe_code)]`
 - Clippy pedantic with a curated allow-list
-- 90% line coverage minimum (85% per module)
-- Code duplication <= 6% (production code, tests
-  excluded)
+- 90% line coverage minimum (85% per file)
+- Code duplication <= 6% pooled, <= 12% per crate
+  (production code, tests excluded)
 - `cargo fmt` enforced (max width 80)
+- A dependency version under 14 days old fails, unless
+  named in `KOZMOTIC_DEP_AGE_ALLOW`
+- Files under `scripts/` with a shebang staged executable
+- No RUSTSEC advisory (`cargo xtask audit`; network and
+  `cargo-audit` needed)
 
 ## Conventions
 

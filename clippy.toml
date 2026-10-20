@@ -41,6 +41,7 @@ doc-valid-idents = [
     "rustfmt",
     "rustup",
     "Clippy",
+    "CommonMark",
     # kozmotic domain terms.
     "Kozmotic",
     "Claude",

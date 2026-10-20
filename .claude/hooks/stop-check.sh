@@ -10,12 +10,16 @@
 # `cargo xtask validate` still runs from /commit and
 # is available manually for explicit pre-flight checks.
 #
-# fmt-check is included (~0.2s) because /commit only
-# runs full validate for version-bumping commits;
-# chore / docs / refactor / test commits skip validate
-# entirely, so a fmt drift can otherwise slip through
-# both interactive gates and land in CI as a fmt-check
-# failure (see commit 9d7b3ff for a worked example).
+# `cargo xtask clippy` also lints xtask with each feature
+# group off and alone; those passes stay cached unless
+# xtask itself changes (about 1.3s warm, 4s cold).
+#
+# fmt-check is included (~0.2s) so a fmt drift shows at
+# the end of a turn, before /commit's
+# `cargo xtask validate --check` refuses it. The hook runs
+# only fmt-check, clippy and tests; every other gate
+# (cooldown, scripts, coverage, duplication, audit) is
+# left to that validate.
 #
 # Exit codes:
 #   0 -- all checks passed (or nothing to check)

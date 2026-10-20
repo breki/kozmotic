@@ -1,16 +1,16 @@
 ---
 name: todo
 description: >
-  Process the next pending TODO item from TODO.md.
+  Process the next pending item from docs/todo.md.
   Asks clarifying questions, implements the item,
-  then moves it to the Done section.
+  then removes it with `cargo xtask todo done`.
 disable-model-invocation: true
 ---
 
 ## Steps
 
-1. Read `TODO.md` and identify the first pending
-   item (items under "Done" are already completed).
+1. Read `docs/todo.md` and identify the first item
+   (each item is a `### <slug>` entry).
 
 2. If the item is ambiguous or has multiple possible
    approaches, use AskUserQuestion to clarify before
@@ -24,14 +24,10 @@ disable-model-invocation: true
    cargo xtask validate
    ```
 
-5. Move the completed item from the pending list
-   to a `## Done` section at the bottom of
-   `TODO.md`. Add the completion date in
-   parentheses, e.g.:
+5. Remove the completed item:
    ```
-   ## Done
-   - extract modules from main.rs (2026-03-25)
+   cargo xtask todo done <slug>
    ```
-   Create the `## Done` section if it doesn't exist.
+   Git history and `CHANGELOG.md` record what shipped.
 
 6. Run `/commit` to commit the changes.

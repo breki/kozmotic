@@ -42,13 +42,20 @@ commands.
 ## Build Commands
 
 ```bash
-cargo xtask check             # fast compile check
-cargo xtask validate          # fmt + clippy + tests + coverage
+cargo xtask check             # type-check all targets (compiles tests, runs none)
+cargo xtask validate          # dep-age + fmt + scripts + dupes + clippy + tests + coverage + audit
 cargo xtask test [filter]     # tests only
-cargo xtask clippy            # lint only
+cargo xtask clippy            # lint (+ xtask: all features off, each alone)
 cargo xtask coverage          # coverage only (>=90%)
 cargo xtask fmt               # format code
 cargo xtask dupes             # code duplication check
+cargo xtask audit             # security-advisory audit (RUSTSEC)
+cargo xtask dep-age-check     # cooldown-gate changed deps (vs HEAD)
+cargo xtask scripts-check     # scripts/ files with a shebang staged executable
+cargo xtask canon-check       # canon paths, xrefs, grants, width (not in validate yet)
+cargo xtask records-check     # record files' ids and refs (not in validate yet)
+cargo xtask doc               # rustdoc links, public + private (not in validate yet)
+cargo xtask deny              # licence/bans/sources via cargo-deny (not in validate yet)
 cargo xtask changelog add     # add a CHANGELOG entry
 cargo xtask todo              # list/add/done TODO items
 ```
@@ -56,10 +63,9 @@ cargo xtask todo              # list/add/done TODO items
 Never use raw `cargo test` or `cargo clippy` -- always
 go through `xtask`.
 
-Run `cargo xtask fmt` before `cargo xtask validate`.
-Validate only *checks* formatting (`cargo fmt --check`), so
-freshly written code that rustfmt would reflow fails at step
-1 of 4 and the whole run has to be repeated.
+`cargo xtask validate` formats files in place; pass
+`--check` to make that step read-only (`/commit` and
+`/release` do, since they validate after staging).
 
 ### PowerShell Build Script
 
@@ -237,16 +243,44 @@ just when the code compiles:
    have run over the staged diff (see `/commit` step 3).
 5. **`cargo xtask validate`** passes (the umbrella gate).
 
-`cargo xtask validate` checks:
+`cargo xtask validate` runs the shared `rustbase-xtask` gates
+(8 steps), in this order:
 
-1. **Formatting**: `cargo fmt --all -- --check`
-2. **No warnings**:
-   `cargo clippy --all-targets -- -D warnings`
-3. **All tests pass**: `cargo test`
-4. **Coverage >= 90%** (per-module floor 85%)
+1. **Dependency cooldown** (`cargo xtask dep-age-check`): a
+   dependency added or bumped since `HEAD` and published
+   within 14 days fails, before anything compiles it.
+   Unchanged lockfiles make it a no-op. Wave a reviewed one
+   through with `KOZMOTIC_DEP_AGE_ALLOW=name@version,...`.
+   The gate cannot tell a security fix from any other bump, so
+   a fresh security fix goes in that list too; policy only
+   lets it skip the 14-day wait. An unreachable registry warns,
+   unless `KOZMOTIC_DEP_AGE_STRICT=1` or `CI=true` makes it
+   fail. CI runs it as the `dep-age` job, with the list from
+   the repository variable of the same name (see
+   `.github/workflows/ci.yml`).
+2. **Formatting**: fixed in place; `cargo xtask validate
+   --check` runs the read-only `cargo fmt --all -- --check`
+3. **Executable scripts** (`cargo xtask scripts-check`): every
+   file under `scripts/` that starts with `#!` is staged as mode
+   `100755`, since `release.yml` runs
+   `scripts/checksum-assets.sh` by path
+4. **Duplication** <= 6% pooled and <= 12% in any one crate
+   (production code only)
+5. **No warnings**: `cargo clippy --all-targets -- -D
+   warnings`, then `xtask` again with every optional feature
+   off and with each one alone
+6. **Tests**: the `xtask` package's tests; Coverage (7) runs
+   every other crate's
+7. **Coverage >= 90%** overall and >= 85% in each file
+8. **Security audit** (`cargo xtask audit`, needs
+   `cargo install cargo-audit` and network): a RUSTSEC
+   vulnerability fails; an unreachable advisory DB warns
 
-`cargo xtask dupes` (duplication <= 6%, production code
-only) is run separately rather than as a validate step.
+Each run's step lines and its failure also go to
+`target/validate.log`; a second `validate` in the same checkout
+is refused while the first runs. The library's canon, records,
+doc and deny gates are left out for now (`DEFERRED` in
+`xtask/src/validate.rs`); each runs as its own subcommand.
 
 ## Semantic Versioning
 
@@ -273,18 +307,19 @@ Always keep an `[Unreleased]` section at the top.
 
 ## Planning
 
-`TODO.md` tracks upcoming tasks under `## Pending` and
-`## Done`. Check it before starting new work and keep it up
-to date as items are completed or added.
+`docs/todo.md` tracks upcoming tasks: an introduction, then one
+`### <slug>` entry per item with a `**Summary:**` line. Check it
+before starting new work. Completing an item removes it; git
+history and `CHANGELOG.md` record what shipped.
 
-Edit it through `cargo xtask todo` rather than by hand -- the
-sections sit far apart and a hand edit easily splits one with
-a duplicate heading:
+Edit it through `cargo xtask todo` rather than by hand -- `add`
+refuses a body line that would read as a heading, and a hand edit
+can slip one in:
 
 ```bash
 cargo xtask todo list                       # pending slugs
-cargo xtask todo add --slug <s> --summary "..."
-cargo xtask todo done --slug <s>
+cargo xtask todo add --slug <s> --summary "..." [--body "..."]
+cargo xtask todo done <s>
 ```
 
 The same applies to `CHANGELOG.md`:
@@ -292,6 +327,23 @@ The same applies to `CHANGELOG.md`:
 ```bash
 cargo xtask changelog add --kind added "..."   # or changed/fixed/removed
 ```
+
+## Optional xtask features
+
+`xtask` groups its optional commands into Cargo features:
+
+| Feature | Commands | kozmotic |
+|-|-|-|
+| `frontend` | the four `frontend-*` gates | off |
+| `deploy` | `deploy`, `deploy-setup` | off |
+| `template-tools` | `sync-candidates`, `feedback-add`, `backfeed-*` | on |
+| `clean-cache` | `clean-cache` | on |
+
+A group is dropped by leaving it out of `default` in
+`xtask/Cargo.toml`; its modules then compile out, with no
+code edit. `cargo xtask clippy` lints `xtask` with every
+feature off and with each one alone, so a group's code stays
+compiling even when it is off.
 
 ## Workspace lints and xtask overrides
 
@@ -343,10 +395,10 @@ recipe for keeping the gate honest without weakening it:
    `cargo xtask coverage` merges these with its baseline
    (`src/main.rs`, `src/bin/`); the leaf is exempt, the
    orchestrator is not. An absent section leaves the baseline
-   unchanged, and a missing manifest degrades to the baseline
-   rather than failing. A pattern matching *every* file
-   (empty, `.`, `.*`, `.+`) is rejected -- it would silently
-   neuter the gate. Only the `[workspace.metadata.coverage]`
+   unchanged, but a missing or unreadable manifest fails the
+   gate. A blank entry is ignored; a pattern matching *every*
+   file (`.`, `.*`, `.+`, `.*?`) is rejected -- it would
+   silently neuter the gate. Only the `[workspace.metadata.coverage]`
    header plus a line-leading `ignore = [...]` is read; the
    dotted-key and inline-table spellings are not.
 3. **Add a `KOZMOTIC_TEST_*` escape hatch in the excluded
@@ -414,12 +466,12 @@ Run `cargo fix --edition --workspace` followed by
 
 | Skill | Purpose |
 |-------|---------|
-| `/check` | Fast compilation check (no tests) |
+| `/check` | Type-check all targets, tests included (runs none) |
 | `/test` | Run tests with agent-friendly output |
 | `/validate` | Full quality pipeline with stepwise progress |
 | `/commit` | Commit with versioning, diary, and conventions |
 | `/release` | Prepare a versioned release |
-| `/todo` | Add a TODO item or implement the next pending one |
+| `/todo` | Implement the first item in `docs/todo.md` (capture one with `cargo xtask todo add`) |
 | `/simplify` | Review changed code for quality |
 | `/architect` | Project overview and architecture guide |
 | `/agent-cli` | Patterns for agent-friendly CLI subcommands |

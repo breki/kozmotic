@@ -422,24 +422,28 @@ hook JSON directly. Both protocol adapters bypass `--format`.
 ## Development
 
 Build tasks go through the `xtask` crate rather than raw
-cargo commands, so the same checks run locally and in CI:
+cargo commands; CI runs the same `xtask` test, clippy and
+dependency-cooldown commands:
 
 ```bash
-cargo xtask check       # fast compile check
+cargo xtask check       # type-check all targets (tests too)
 cargo xtask test        # tests only
-cargo xtask clippy      # lints only
+cargo xtask clippy      # lint (+ xtask per feature group)
 cargo xtask fmt         # format the code
-cargo xtask validate    # fmt + clippy + tests + coverage
+cargo xtask validate    # the eight gates (see below)
+cargo xtask audit       # RUSTSEC advisory audit
 cargo xtask coverage    # coverage only (>= 90%)
 cargo xtask dupes       # duplication check (<= 6%)
-cargo xtask changelog   # add a CHANGELOG entry
-cargo xtask todo        # list/add/done TODO items
+cargo xtask changelog add   # add a CHANGELOG entry
+cargo xtask todo        # list/add/done docs/todo.md items
 ```
 
-`cargo xtask validate` is the acceptance gate: formatting,
-`-D warnings` clippy, the full test suite, and a 90% line
-coverage floor (85% per module). On Windows, `.\build.ps1
-validate` wraps the same pipeline.
+`cargo xtask validate` is the acceptance gate: the 14-day
+dependency cooldown, formatting, executable scripts,
+duplication, `-D warnings` clippy, the tests, a 90% line
+coverage floor (85% per file), and the RUSTSEC audit, which
+needs `cargo-audit` and network access. On Windows,
+`.\build.ps1 validate` wraps the same pipeline.
 
 Hardware- and network-bound leaf modules are exempt from the
 coverage gate via `[workspace.metadata.coverage]` in the root
@@ -478,7 +482,7 @@ Ideas, not commitments:
 - [ ] Data transformation tools
 - [ ] CI/CD integrations
 
-`TODO.md` tracks what is actually queued next.
+`docs/todo.md` tracks what is actually queued next.
 
 ## Why Kozmotic?
 

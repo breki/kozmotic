@@ -1,5 +1,11 @@
 name: CI
 
+# Read-only for every job. None needs to write, and release.yml
+# calls this workflow with `contents: write`; without this the jobs
+# would inherit that token while dependency build scripts run.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ main, master ]
@@ -37,8 +43,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      # Through xtask, as CLAUDE.md requires, so CI runs what a
+      # developer runs.
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo xtask test --verbose
       # An early warning; release.yml runs the same check on the
       # binary it ships. The script says why the check exists.
       - name: Check kozmotic.exe imports no VC runtime (Windows)
@@ -79,5 +87,44 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+      # Also lints xtask with each feature group off and alone, which
+      # a plain `cargo clippy` (default features only) never sees.
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo xtask clippy
+
+  # The 14-day dependency cooldown. `dep-age-check` diffs the
+  # lockfile against a base commit; in CI the checkout *is* HEAD, so
+  # the base is the commit this push or pull request started from.
+  # The standalone command fails, rather than warns, when the
+  # registry is unreachable or the base is missing.
+  dep-age:
+    name: Dependency cooldown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the base commit must be present
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      # A pull request is checked out as a merge commit, so the base
+      # branch's commit gives exactly the PR's changes. A push diffs
+      # against the previous tip. An all-zero `before` -- a new
+      # branch, or the new tag whose push makes release.yml call this
+      # workflow -- falls back to the parent, so at release time the
+      # job checks only the release commit; pushes to main are what
+      # gate dependencies. Values go through `env`, never into the
+      # script.
+      - name: Cooldown on changed dependencies
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          # Maintainer-set repository variable; a pull request
+          # cannot approve its own fresh dependency.
+          KOZMOTIC_DEP_AGE_ALLOW: ${{ vars.KOZMOTIC_DEP_AGE_ALLOW }}
+        run: |
+          base="${PR_BASE:-$PUSH_BEFORE}"
+          case "$base" in
+            ""|0000000000000000000000000000000000000000) base="HEAD^" ;;
+          esac
+          echo "Diffing lockfiles against $base"
+          cargo xtask dep-age-check --base "$base"

@@ -71,9 +71,11 @@ Before starting a release:
 5. **Run quality gates**
 
    ```
-   cargo xtask validate
+   cargo xtask validate --check
    ```
 
+   `--check` keeps the format step read-only, so the gates
+   verify the release rather than rewrite files outside it.
    If any check fails, stop and fix before continuing.
 
 6. **Stage and commit**
