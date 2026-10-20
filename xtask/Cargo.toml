@@ -3,10 +3,9 @@ name = "xtask"
 version = "0.1.0"
 edition = "2024"
 publish = false
-# Set even though `publish = false`: the `deny` licence gate does
-# not exempt unpublished crates (see the note in `deny.toml`), so an
-# unlicensed workspace member fails it. One line here is cheaper than
-# an exemption.
+# Set even though `publish = false`: `cargo xtask deny` does not
+# exempt unpublished crates, so an unlicensed workspace member fails
+# it once kozmotic adopts that gate (`DEFERRED`, `validate.rs`).
 license = "MIT"
 
 [lints]

@@ -3,7 +3,7 @@ description: Plan and implement a captured issue from docs/todo.md
 allowed-tools: Bash(cargo xtask*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Read, Write, Edit, Glob, Grep, Agent, AskUserQuestion, Skill(commit)
 ---
 
-Plan and implement an item captured by `/todo`. The
+Plan and implement an item from `docs/todo.md`. The
 plan lives at `docs/issues/<slug>.md` and is updated
 as the work progresses.
 
@@ -113,9 +113,8 @@ particular:
 
 ## Phase 3 -- Finalise
 
-1. Run `cargo xtask validate`. All checks must pass
-   (fmt, clippy, tests, coverage >= 90%, duplication
-   <= 6%).
+1. Run `cargo xtask validate`. All eight gates must pass
+   (`CLAUDE.md`, "Definition of Done").
 
 2. If the change affects developer workflow or skills,
    update the relevant files under `.claude/commands/`

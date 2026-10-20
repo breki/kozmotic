@@ -109,9 +109,12 @@ Create a git commit that follows project conventions.
 
 4. **Run pre-commit checks**
 
-   Before committing, verify the code is clean:
+   Before committing, verify the code is clean. `--check`
+   keeps the format step read-only: without it `validate`
+   formats files in place, which would fix the working tree
+   but not the copy already staged.
    ```
-   cargo xtask validate
+   cargo xtask validate --check
    ```
    If any check fails, fix the issue first (or ask the
    user) — do not skip hooks or checks.

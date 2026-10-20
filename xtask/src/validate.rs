@@ -39,12 +39,11 @@ fn steps(check: bool) -> Result<Vec<Step>, String> {
 /// Library gates `validate` leaves out; each still runs as its own
 /// subcommand. Canon and Records: kozmotic's canon and record files
 /// predate the checks' formats. Doc: its rustdoc links are unchecked.
-/// Deny: there is no `deny.toml`. Scripts: not yet run as a gate
-/// here. Adopting them is the follow-up to breki/rustbase#9.
-const DEFERRED: [&str; 5] = [
+/// Deny: there is no `deny.toml`. Tracked as `adopt-deferred-gates`
+/// in `docs/todo.md`.
+const DEFERRED: [&str; 4] = [
     step::names::CANON,
     step::names::RECORDS,
-    step::names::SCRIPTS,
     step::names::DOC,
     step::names::DENY,
 ];
