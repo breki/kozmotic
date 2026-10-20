@@ -1,9 +1,9 @@
 ---
-description: Fast compilation check (no tests)
+description: Type-check every target, tests included (runs none)
 allowed-tools: Bash(cargo xtask:*)
 ---
 
-Fast compilation check without running tests.
+Type-check every target, tests included, without running any.
 
 ## Usage
 
@@ -17,7 +17,8 @@ Fast compilation check without running tests.
 ## When to use
 
 After making code changes, before running tests --
-catches syntax/type errors in under a second.
+catches syntax and type errors in production and test code,
+in seconds on a warm build.
 
 ## Implementation
 

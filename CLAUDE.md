@@ -42,13 +42,15 @@ commands.
 ## Build Commands
 
 ```bash
-cargo xtask check             # fast compile check
-cargo xtask validate          # fmt + clippy + tests + coverage
+cargo xtask check             # type-check all targets (compiles tests, runs none)
+cargo xtask validate          # dep-age + fmt + dupes + clippy + tests + coverage + audit
 cargo xtask test [filter]     # tests only
-cargo xtask clippy            # lint only
+cargo xtask clippy            # lint (+ xtask: all features off, each alone)
 cargo xtask coverage          # coverage only (>=90%)
 cargo xtask fmt               # format code
 cargo xtask dupes             # code duplication check
+cargo xtask audit             # security-advisory audit (RUSTSEC)
+cargo xtask dep-age-check     # cooldown-gate changed deps (vs HEAD)
 cargo xtask changelog add     # add a CHANGELOG entry
 cargo xtask todo              # list/add/done TODO items
 ```
@@ -237,16 +239,36 @@ just when the code compiles:
    have run over the staged diff (see `/commit` step 3).
 5. **`cargo xtask validate`** passes (the umbrella gate).
 
-`cargo xtask validate` checks:
+`cargo xtask validate` runs the shared `rustbase-xtask` gates
+(7 steps), in this order:
 
-1. **Formatting**: `cargo fmt --all -- --check`
-2. **No warnings**:
-   `cargo clippy --all-targets -- -D warnings`
-3. **All tests pass**: `cargo test`
-4. **Coverage >= 90%** (per-module floor 85%)
+1. **Dependency cooldown** (`cargo xtask dep-age-check`): a
+   dependency added or bumped since `HEAD` and published
+   within 14 days fails, before anything compiles it.
+   Unchanged lockfiles make it a no-op. Wave a reviewed one
+   through with `KOZMOTIC_DEP_AGE_ALLOW=name@version,...`;
+   security fixes are exempt from the window but still named
+   there. An unreachable registry warns, unless
+   `KOZMOTIC_DEP_AGE_STRICT=1` or `CI=true` makes it fail.
+2. **Formatting**: fixed in place; `cargo xtask validate
+   --check` runs the read-only `cargo fmt --all -- --check`
+3. **Duplication** <= 6% pooled and <= 12% in any one crate
+   (production code only)
+4. **No warnings**: `cargo clippy --all-targets -- -D
+   warnings`, then `xtask` again with every optional feature
+   off and with each one alone
+5. **Tests**: the `xtask` package's tests; Coverage (6) runs
+   every other crate's
+6. **Coverage >= 90%** overall and >= 85% in each file
+7. **Security audit** (`cargo xtask audit`, needs
+   `cargo install cargo-audit` and network): a RUSTSEC
+   vulnerability fails; an unreachable advisory DB warns
 
-`cargo xtask dupes` (duplication <= 6%, production code
-only) is run separately rather than as a validate step.
+Each run's step lines and its failure also go to
+`target/validate.log`; a second `validate` in the same checkout
+is refused while the first runs. The library's canon, records,
+scripts, doc and deny gates are left out for now (`DEFERRED` in
+`xtask/src/validate.rs`); each runs as its own subcommand.
 
 ## Semantic Versioning
 
@@ -273,18 +295,19 @@ Always keep an `[Unreleased]` section at the top.
 
 ## Planning
 
-`TODO.md` tracks upcoming tasks under `## Pending` and
-`## Done`. Check it before starting new work and keep it up
-to date as items are completed or added.
+`docs/todo.md` tracks upcoming tasks: an introduction, then one
+`### <slug>` entry per item with a `**Summary:**` line. Check it
+before starting new work. Completing an item removes it; git
+history and `CHANGELOG.md` record what shipped.
 
-Edit it through `cargo xtask todo` rather than by hand -- the
-sections sit far apart and a hand edit easily splits one with
-a duplicate heading:
+Edit it through `cargo xtask todo` rather than by hand -- `add`
+refuses a body line that would read as a heading, and a hand edit
+can slip one in:
 
 ```bash
 cargo xtask todo list                       # pending slugs
-cargo xtask todo add --slug <s> --summary "..."
-cargo xtask todo done --slug <s>
+cargo xtask todo add --slug <s> --summary "..." [--body "..."]
+cargo xtask todo done <s>
 ```
 
 The same applies to `CHANGELOG.md`:

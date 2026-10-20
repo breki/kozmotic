@@ -58,16 +58,17 @@ kozmotic/
   tests/
     integration_test.rs
   xtask/
-    src/
-      main.rs         # xtask CLI entry point
-      helpers.rs      # project_root, run_cargo, etc.
-      validate.rs     # fmt + clippy + test pipeline
+    src/              # the rustbase template's xtask, calling
+                      # the published rustbase-xtask library
+      helpers.rs      # kozmotic's Config (tasks_config)
+      validate.rs     # the library's gates minus DEFERRED
+  docs/
+    todo.md           # ideas and upcoming tasks
   Cargo.toml          # workspace root
   CHANGELOG.md        # Keep a Changelog format
   CLAUDE.md           # project instructions
   CREDITS.md          # sound attribution
   LICENSE
-  TODO.md             # ideas and upcoming tasks
 ```
 
 ## Core Abstractions
@@ -241,7 +242,7 @@ Linux jobs install `libasound2-dev` for rodio.
 
 ## Planning
 
-`TODO.md` tracks ideas and upcoming tasks. Check it
+`docs/todo.md` tracks ideas and upcoming tasks. Check it
 before starting new work and update it as items are
 completed or added.
 

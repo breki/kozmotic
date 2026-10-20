@@ -478,7 +478,7 @@ Ideas, not commitments:
 - [ ] Data transformation tools
 - [ ] CI/CD integrations
 
-`TODO.md` tracks what is actually queued next.
+`docs/todo.md` tracks what is actually queued next.
 
 ## Why Kozmotic?
 
